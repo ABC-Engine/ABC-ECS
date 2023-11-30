@@ -1,33 +1,40 @@
+use anymap::AnyMap;
+use slotmap::{DefaultKey, SlotMap};
 use std::any;
 
 pub struct EntitiesAndComponents {
     entities: Vec<Entity>,
-    components: Vec<Vec<Box<dyn Component>>>, // where components[entity_id][component_id (which shouldn't need to indexed into)]
+    components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
 }
 
 impl EntitiesAndComponents {
     pub fn new() -> Self {
         EntitiesAndComponents {
             entities: vec![],
-            components: vec![],
+            components: SlotMap::new(),
         }
     }
-    pub fn get_components(&self, entity: Entity) -> &Vec<Box<dyn Component>> {
+
+    pub fn get_components(&self, entity: Entity) /*-> &Vec<Box<dyn Component>>*/
+    {
+        // get the all the components for the entity
+        // maybe this is the laziness talking, but I don't want to
+        // TODO:
+    }
+
+    pub fn get_component<T: 'static>(&self, entity: Entity) -> &T {
         self.components
             .get(entity.entity_id)
             .expect("Entity ID does not exist, was the Entity ID edited?")
+            .get::<Box<T>>()
+            .expect("Component does not exist on the object, was the Component added to it?")
     }
 
     pub fn add_entity(&mut self) -> Entity {
-        let entity_id = self.entities.len();
-        self.entities.push(Entity {
-            entity_id: entity_id,
-        });
-        self.components.push(vec![]);
+        let entity_id = self.components.insert(AnyMap::new());
+        self.entities.push(Entity { entity_id });
 
-        Entity {
-            entity_id: entity_id,
-        }
+        Entity { entity_id }
     }
 
     pub fn add_component_to<T: Component>(&mut self, entity: Entity, component: T) {
@@ -36,7 +43,7 @@ impl EntitiesAndComponents {
             .get_mut(entity.entity_id)
             .expect("Entity ID does not exist, was the Entity ID edited?");
 
-        components.push(Box::new(component));
+        components.insert(Box::new(component));
     }
 }
 
@@ -74,7 +81,7 @@ pub trait Component: 'static {
 // indexed into arrays of components for now...
 #[derive(Clone, Copy)]
 pub struct Entity {
-    entity_id: usize,
+    entity_id: DefaultKey,
 }
 
 /// Systems access and change components on objects
@@ -114,11 +121,8 @@ mod tests {
         fn run(&self, engine: &mut EntitiesAndComponents) {
             println!("Running Movement System");
             for entity in &engine.entities {
-                for component in engine.get_components(*entity) {
-                    if let Some(position) = component.as_any().downcast_ref::<Position>() {
-                        println!("Position: {}, {}", position.x, position.y);
-                    }
-                }
+                let position = engine.get_component::<Position>(*entity);
+                println!("Position: {}, {}", position.x, position.y);
             }
         }
     }
@@ -134,6 +138,9 @@ mod tests {
         entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
 
         engine.add_system(Box::new(MovementSystem {}));
+
+        let mut slotmap = SlotMap::new();
+        let foo = slotmap.insert(Position { x: 0.0, y: 0.0 });
 
         for i in 0..5 {
             engine.run();
