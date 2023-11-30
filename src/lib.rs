@@ -3,6 +3,10 @@ use slotmap::{DefaultKey, SlotMap};
 use std::any;
 
 pub struct EntitiesAndComponents {
+    // Maybe there should be an object that takes a component
+    // and has a list of which entities have that component?
+    // This would make it easier to iterate over all entities with a certain component,
+    // without having to iterate over all entities
     entities: Vec<Entity>,
     components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
 }
@@ -22,12 +26,38 @@ impl EntitiesAndComponents {
         // TODO:
     }
 
+    pub fn try_get_component<T: 'static>(&self, entity: Entity) -> Option<&Box<T>> {
+        self.components
+            .get(entity.entity_id)
+            .expect("Entity ID does not exist, was the Entity ID edited?")
+            .get::<Box<T>>()
+    }
+
+    pub fn try_get_component_mut<T: 'static>(&mut self, entity: Entity) -> Option<&mut Box<T>> {
+        self.components
+            .get_mut(entity.entity_id)
+            .expect("Entity ID does not exist, was the Entity ID edited?")
+            .get_mut::<Box<T>>()
+    }
+
     pub fn get_component<T: 'static>(&self, entity: Entity) -> &T {
         self.components
             .get(entity.entity_id)
             .expect("Entity ID does not exist, was the Entity ID edited?")
             .get::<Box<T>>()
-            .expect("Component does not exist on the object, was the Component added to it?")
+            .expect(
+                "Component does not exist on the object, was the Component added to the entity?",
+            )
+    }
+
+    pub fn get_component_mut<T: 'static>(&mut self, entity: Entity) -> &mut T {
+        self.components
+            .get_mut(entity.entity_id)
+            .expect("Entity ID does not exist, was the Entity ID edited?")
+            .get_mut::<Box<T>>()
+            .expect(
+                "Component does not exist on the object, was the Component added to the entity?",
+            )
     }
 
     pub fn add_entity(&mut self) -> Entity {
@@ -120,9 +150,12 @@ mod tests {
     impl System for MovementSystem {
         fn run(&self, engine: &mut EntitiesAndComponents) {
             println!("Running Movement System");
-            for entity in &engine.entities {
-                let position = engine.get_component::<Position>(*entity);
+            // How can this be done more elegantly?
+            for i in 0..engine.entities.len() {
+                let entity = engine.entities[i];
+                let mut position = engine.get_component_mut::<Position>(entity);
                 println!("Position: {}, {}", position.x, position.y);
+                position.x += 1.0;
             }
         }
     }
@@ -138,9 +171,6 @@ mod tests {
         entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
 
         engine.add_system(Box::new(MovementSystem {}));
-
-        let mut slotmap = SlotMap::new();
-        let foo = slotmap.insert(Position { x: 0.0, y: 0.0 });
 
         for i in 0..5 {
             engine.run();
