@@ -19,11 +19,16 @@ impl EntitiesAndComponents {
         }
     }
 
-    pub fn get_components(&self, entity: Entity) /*-> &Vec<Box<dyn Component>>*/
-    {
-        // get the all the components for the entity
-        // maybe this is the laziness talking, but I don't want to
-        // TODO:
+    pub fn get_components(&self, entity: Entity) -> &AnyMap {
+        self.components
+            .get(entity.entity_id)
+            .expect("Entity ID does not exist, was the Entity ID edited?")
+    }
+
+    pub fn get_components_mut(&mut self, entity: Entity) -> &mut AnyMap {
+        self.components
+            .get_mut(entity.entity_id)
+            .expect("Entity ID does not exist, was the Entity ID edited?")
     }
 
     pub fn try_get_component<T: 'static>(&self, entity: Entity) -> Option<&Box<T>> {
@@ -150,12 +155,28 @@ mod tests {
     impl System for MovementSystem {
         fn run(&self, engine: &mut EntitiesAndComponents) {
             println!("Running Movement System");
-            // How can this be done more elegantly?
             for i in 0..engine.entities.len() {
                 let entity = engine.entities[i];
-                let mut position = engine.get_component_mut::<Position>(entity);
+                /*let velocity = engine.get_component::<Velocity>(entity);
+                let mut position = engine.get_component_mut::<Position>(entity);*/
+                let components = engine.get_components_mut(entity);
+
+                // This is what should be happening in the engine
+                // The problem when trying to implement this is that
+                // a variable ammount of generics would be needed
+                // and as far as I know that is not possible
+                // I need to sit down and think about this more
+
+                let velocity_pointer: *const Velocity =
+                    &**components.get::<Box<Velocity>>().unwrap();
+                let mut position = components.get_mut::<Box<Position>>().unwrap();
+
+                let velocity = unsafe { &*velocity_pointer };
+
+                position.x += velocity.x;
+                position.y += velocity.y;
+
                 println!("Position: {}, {}", position.x, position.y);
-                position.x += 1.0;
             }
         }
     }
