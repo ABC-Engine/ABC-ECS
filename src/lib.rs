@@ -11,6 +11,73 @@ pub struct EntitiesAndComponents {
     components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
 }
 
+// this is beautiful code don't worry about it
+// this implements the Components trait for tuples of Components
+// this is needed so that the you can get a variable ammount of components
+// from the get_components function
+pub trait Components: 'static {
+    fn get_components(&self) -> Vec<&dyn any::Any>;
+    fn get_mut_components(&mut self) -> Vec<&mut dyn any::Any>;
+}
+
+macro_rules! get_components {
+    ($engine:expr, $entity:expr, $($component:ty),*) => {
+        {
+            let mut all_types = vec![];
+            $(
+                all_types.push(any::TypeId::of::<$component>());
+            )*
+
+            for i in 0..all_types.len() {
+                for j in i+1..all_types.len() {
+                    assert_ne!(all_types[i], all_types[j]);
+                }
+            }
+
+            let components = $engine.get_components($entity);
+
+            (
+                $(
+                    {
+                        let pointer: *const $component = &**components.get::<Box<$component>>().unwrap();
+                        let reference = unsafe { &*pointer };
+                        reference
+                    },
+                )*
+            )
+        }
+    };
+}
+
+macro_rules! get_components_mut {
+    ($engine:expr, $entity:expr, $($component:ty),*) => {
+        {
+            let mut all_types = vec![];
+            $(
+                all_types.push(any::TypeId::of::<$component>());
+            )*
+
+            for i in 0..all_types.len() {
+                for j in i+1..all_types.len() {
+                    assert_ne!(all_types[i], all_types[j]);
+                }
+            }
+
+            let components = $engine.get_components_mut($entity);
+
+            (
+                $(
+                    {
+                        let pointer: *mut $component = &mut **components.get_mut::<Box<$component>>().unwrap();
+                        let reference = unsafe { &mut *pointer };
+                        reference
+                    },
+                )*
+            )
+        }
+    };
+}
+
 impl EntitiesAndComponents {
     pub fn new() -> Self {
         EntitiesAndComponents {
@@ -159,19 +226,7 @@ mod tests {
                 let entity = engine.entities[i];
                 /*let velocity = engine.get_component::<Velocity>(entity);
                 let mut position = engine.get_component_mut::<Position>(entity);*/
-                let components = engine.get_components_mut(entity);
-
-                // This is what should be happening in the engine
-                // The problem when trying to implement this is that
-                // a variable ammount of generics would be needed
-                // and as far as I know that is not possible
-                // I need to sit down and think about this more
-
-                let velocity_pointer: *const Velocity =
-                    &**components.get::<Box<Velocity>>().unwrap();
-                let mut position = components.get_mut::<Box<Position>>().unwrap();
-
-                let velocity = unsafe { &*velocity_pointer };
+                let (velocity, position) = get_components_mut!(engine, entity, Velocity, Position);
 
                 position.x += velocity.x;
                 position.y += velocity.y;
