@@ -11,15 +11,18 @@ pub struct EntitiesAndComponents {
     components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
 }
 
-// this is beautiful code don't worry about it
-// this implements the Components trait for tuples of Components
-// this is needed so that the you can get a variable ammount of components
-// from the get_components function
 pub trait Components: 'static {
     fn get_components(&self) -> Vec<&dyn any::Any>;
     fn get_mut_components(&mut self) -> Vec<&mut dyn any::Any>;
 }
 
+/// This macro is used to get a variable ammount of components from an entity
+/// It returns a tuple of references to the components
+/// ```rust
+/// let (position, velocity) = get_components!(engine.entities_and_components, entity, Position, Velocity);
+/// println!("Position: {}, {}", position.x, position.y);
+/// println!("Velocity: {}, {}", velocity.x, velocity.y);
+/// ```
 macro_rules! get_components {
     ($engine:expr, $entity:expr, $($component:ty),*) => {
         {
@@ -34,12 +37,10 @@ macro_rules! get_components {
                 }
             }
 
-            let components = $engine.get_components($entity);
-
             (
                 $(
                     {
-                        let pointer: *const $component = &**components.get::<Box<$component>>().unwrap();
+                        let pointer: *const $component = &*$engine.get_component::<$component>($entity);
                         let reference = unsafe { &*pointer };
                         reference
                     },
@@ -49,6 +50,18 @@ macro_rules! get_components {
     };
 }
 
+/// This macro is used to muttably borrow a variable ammount of components from an entity
+///
+/// It returns a tuple of references to the components
+/// ```rust
+/// let (position, velocity) = get_components_mut!(engine.entities_and_components, entity, Position, Velocity);
+/// position.x += velocity.x;
+/// position.y += velocity.y;
+/// println!("Position: {}, {}", position.x, position.y);
+/// ```
+/// WARNING: This macro is not safe to use if you are borrowing the same component mutably more than once
+///
+/// It will panic if you do this in a single call to the macro, but it will not panic if you do it in seperate calls
 macro_rules! get_components_mut {
     ($engine:expr, $entity:expr, $($component:ty),*) => {
         {
@@ -63,12 +76,10 @@ macro_rules! get_components_mut {
                 }
             }
 
-            let components = $engine.get_components_mut($entity);
-
             (
                 $(
                     {
-                        let pointer: *mut $component = &mut **components.get_mut::<Box<$component>>().unwrap();
+                        let pointer: *mut $component = &mut *$engine.get_component_mut::<$component>($entity);
                         let reference = unsafe { &mut *pointer };
                         reference
                     },
@@ -224,9 +235,11 @@ mod tests {
             println!("Running Movement System");
             for i in 0..engine.entities.len() {
                 let entity = engine.entities[i];
-                /*let velocity = engine.get_component::<Velocity>(entity);
-                let mut position = engine.get_component_mut::<Position>(entity);*/
-                let (velocity, position) = get_components_mut!(engine, entity, Velocity, Position);
+
+                // be very careful when using this macro like this
+                // using it this way could cause a data race if you are not careful
+                let (velocity,) = get_components!(engine, entity, Velocity);
+                let (position,) = get_components_mut!(engine, entity, Position);
 
                 position.x += velocity.x;
                 position.y += velocity.y;
