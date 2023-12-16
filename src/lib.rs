@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 // The Entity will just be an ID that can be
 // indexed into arrays of components for now...
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Entity {
     entity_id: DefaultKey,
 }
@@ -38,6 +38,11 @@ impl EntitiesAndComponents {
     }
 
     pub fn remove_entity(&mut self, entity: Entity) {
+        self.entities_with_components
+            .values_mut()
+            .for_each(|entities| {
+                entities.retain(|e| *e != entity);
+            });
         self.components.remove(entity.entity_id);
         self.entities.remove(entity.entity_id);
     }
@@ -136,7 +141,7 @@ impl EntitiesAndComponents {
         // add the entity to the list of entities with the component
         match self
             .entities_with_components
-            .entry(std::any::TypeId::of::<T>().into())
+            .entry(std::any::TypeId::of::<T>())
         {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 entry.get_mut().push(entity);
