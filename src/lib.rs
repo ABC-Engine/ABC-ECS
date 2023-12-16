@@ -1,32 +1,65 @@
 use anymap::AnyMap;
 use slotmap::{DefaultKey, SlotMap};
-use std::any;
+use std::collections::HashMap;
+
+// The Entity will just be an ID that can be
+// indexed into arrays of components for now...
+#[derive(Clone, Copy, PartialEq)]
+pub struct Entity {
+    entity_id: DefaultKey,
+}
 
 pub struct EntitiesAndComponents {
     // Maybe there should be an object that takes a component
     // and has a list of which entities have that component?
     // This would make it easier to iterate over all entities with a certain component,
     // without having to iterate over all entities
-    entities: Vec<Entity>,
+    entities: SlotMap<DefaultKey, Entity>,
     components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
+    entities_with_components: HashMap<std::any::TypeId, Vec<Entity>>,
 }
 
 impl EntitiesAndComponents {
     pub fn new() -> Self {
         EntitiesAndComponents {
-            entities: vec![],
+            entities: SlotMap::new(),
             components: SlotMap::new(),
+            entities_with_components: HashMap::new(),
         }
     }
 
+    /// Adds an entity to the game engine
+    /// Returns the entity
+    pub fn add_entity(&mut self) -> Entity {
+        let entity_id = self.components.insert(AnyMap::new());
+        self.entities.insert(Entity { entity_id });
+
+        Entity { entity_id }
+    }
+
+    pub fn remove_entity(&mut self, entity: Entity) {
+        self.components.remove(entity.entity_id);
+        self.entities.remove(entity.entity_id);
+    }
+
     /// Gets a reference to all the entities in the game engine
-    pub fn get_entities(&self) -> &Vec<Entity> {
-        &self.entities
+    /// Should rarely if ever be used
+    pub fn get_entities(&self) -> Vec<Entity> {
+        // clone the entities vector
+        self.entities.values().cloned().collect::<Vec<Entity>>()
     }
+
     /// Gets a copy of an entity at a certain index
-    pub fn get_entity(&self, index: usize) -> Entity {
-        self.entities[index].clone()
+    pub fn get_nth_entity(&self, index: usize) -> Option<Entity> {
+        // get the nth entity
+        if let Some(entity) = self.entities.values().nth(index) {
+            Some(entity.clone())
+        } else {
+            None
+        }
     }
+
+    /// Gets the number of entities in the game engine
     pub fn get_entity_count(&self) -> usize {
         self.entities.len()
     }
@@ -90,30 +123,88 @@ impl EntitiesAndComponents {
             )
     }
 
-    /// Adds an entity to the game engine
-    /// Returns the entity
-    pub fn add_entity(&mut self) -> Entity {
-        let entity_id = self.components.insert(AnyMap::new());
-        self.entities.push(Entity { entity_id });
-
-        Entity { entity_id }
-    }
-
     /// Adds a component to an entity
     /// If the component already exists on the entity, it will be overwritten
     pub fn add_component_to<T: Component>(&mut self, entity: Entity, component: T) {
+        // add the component to the entity
         let components = self
             .components
             .get_mut(entity.entity_id)
             .expect("Entity ID does not exist, was the Entity ID edited?");
-
         components.insert(Box::new(component));
-    }
-}
 
-pub trait Components: 'static {
-    fn get_components(&self) -> Vec<&dyn any::Any>;
-    fn get_mut_components(&mut self) -> Vec<&mut dyn any::Any>;
+        // add the entity to the list of entities with the component
+        match self
+            .entities_with_components
+            .entry(std::any::TypeId::of::<T>().into())
+        {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                entry.get_mut().push(entity);
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(vec![entity]);
+            }
+        }
+    }
+
+    pub fn remove_component_from<T: Component>(&mut self, entity: Entity) {
+        // remove the component from the entity
+        let components = self
+            .components
+            .get_mut(entity.entity_id)
+            .expect("Entity ID does not exist, was the Entity ID edited?");
+        components.remove::<Box<T>>();
+
+        // remove the entity from the list of entities with the component
+        match self
+            .entities_with_components
+            .get_mut(&std::any::TypeId::of::<T>())
+        {
+            Some(entities) => {
+                entities.retain(|e| *e != entity);
+            }
+            None => {}
+        }
+    }
+
+    /// returns a vector of all the entities that have a certain component
+    /// if no entities have the component, it will return an empty vector
+    /// clones the vector, so it is not very efficient
+    pub fn get_entities_with_component<T: Component>(&self) -> Vec<Entity> {
+        match self
+            .entities_with_components
+            .get(&std::any::TypeId::of::<T>())
+        {
+            Some(entities) => entities.clone(),
+            None => vec![],
+        }
+    }
+
+    pub fn get_entity_count_with_component<T: Component>(&self) -> usize {
+        match self
+            .entities_with_components
+            .get(&std::any::TypeId::of::<T>())
+        {
+            Some(entities) => entities.len(),
+            None => 0,
+        }
+    }
+
+    pub fn get_nth_entity_with_component<T: Component>(&self, index: usize) -> Option<Entity> {
+        match self
+            .entities_with_components
+            .get(&std::any::TypeId::of::<T>())
+        {
+            Some(entities) => {
+                if let Some(entity) = entities.get(index) {
+                    Some(entity.clone())
+                } else {
+                    None
+                }
+            }
+            None => None,
+        }
+    }
 }
 
 /// This macro is used to get a variable ammount of components from an entity
@@ -267,7 +358,7 @@ impl GameEngine {
     }
 
     pub fn run(&mut self) {
-        for system in &self.systems {
+        for system in &mut self.systems {
             // not sure what to do about the mutability here...
             // maybe seperate the systems and the entities and components?
             system.run(&mut self.entities_and_components);
@@ -277,16 +368,9 @@ impl GameEngine {
 
 pub trait Component: 'static {}
 
-// The Entity will just be an ID that can be
-// indexed into arrays of components for now...
-#[derive(Clone, Copy)]
-pub struct Entity {
-    entity_id: DefaultKey,
-}
-
 /// Systems access and change components on objects
 pub trait System {
-    fn run(&self, engine: &mut EntitiesAndComponents);
+    fn run(&mut self, engine: &mut EntitiesAndComponents);
 }
 
 #[cfg(test)]
@@ -310,9 +394,9 @@ mod tests {
     struct MovementSystem {}
 
     impl System for MovementSystem {
-        fn run(&self, engine: &mut EntitiesAndComponents) {
+        fn run(&mut self, engine: &mut EntitiesAndComponents) {
             for i in 0..engine.entities.len() {
-                let entity = engine.entities[i];
+                let entity = engine.get_nth_entity(i).unwrap(); // this should never panic
 
                 // be very careful when using this macro like this
                 // using it this way could cause a data race if you are not careful
