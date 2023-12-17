@@ -1,6 +1,6 @@
 use anymap::AnyMap;
-use slotmap::{DefaultKey, SlotMap};
-use std::collections::HashMap;
+use slotmap::{DefaultKey, SecondaryMap, SlotMap};
+use std::{any::TypeId, collections::HashMap};
 
 // The Entity will just be an ID that can be
 // indexed into arrays of components for now...
@@ -16,7 +16,8 @@ pub struct EntitiesAndComponents {
     // without having to iterate over all entities
     entities: SlotMap<DefaultKey, Entity>,
     components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
-    entities_with_components: HashMap<std::any::TypeId, Vec<Entity>>,
+    entities_with_components: HashMap<TypeId, Vec<Entity>>,
+    type_ids_on_entity: SecondaryMap<DefaultKey, Vec<TypeId>>,
 }
 
 impl EntitiesAndComponents {
@@ -25,6 +26,7 @@ impl EntitiesAndComponents {
             entities: SlotMap::new(),
             components: SlotMap::new(),
             entities_with_components: HashMap::new(),
+            type_ids_on_entity: SecondaryMap::new(),
         }
     }
 
@@ -33,16 +35,21 @@ impl EntitiesAndComponents {
     pub fn add_entity(&mut self) -> Entity {
         let entity_id = self.components.insert(AnyMap::new());
         self.entities.insert(Entity { entity_id });
+        self.type_ids_on_entity.insert(entity_id, vec![]);
 
         Entity { entity_id }
     }
 
     pub fn remove_entity(&mut self, entity: Entity) {
-        self.entities_with_components
-            .values_mut()
-            .for_each(|entities| {
-                entities.retain(|e| *e != entity);
-            });
+        for type_id in self.type_ids_on_entity[entity.entity_id].clone() {
+            match self.entities_with_components.get_mut(&type_id) {
+                Some(entities) => {
+                    entities.retain(|e| *e != entity);
+                }
+                None => {}
+            }
+        }
+        self.type_ids_on_entity.remove(entity.entity_id);
         self.components.remove(entity.entity_id);
         self.entities.remove(entity.entity_id);
     }
@@ -139,10 +146,7 @@ impl EntitiesAndComponents {
         components.insert(Box::new(component));
 
         // add the entity to the list of entities with the component
-        match self
-            .entities_with_components
-            .entry(std::any::TypeId::of::<T>())
-        {
+        match self.entities_with_components.entry(TypeId::of::<T>()) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 entry.get_mut().push(entity);
             }
@@ -161,10 +165,7 @@ impl EntitiesAndComponents {
         components.remove::<Box<T>>();
 
         // remove the entity from the list of entities with the component
-        match self
-            .entities_with_components
-            .get_mut(&std::any::TypeId::of::<T>())
-        {
+        match self.entities_with_components.get_mut(&TypeId::of::<T>()) {
             Some(entities) => {
                 entities.retain(|e| *e != entity);
             }
@@ -176,30 +177,21 @@ impl EntitiesAndComponents {
     /// if no entities have the component, it will return an empty vector
     /// clones the vector, so it is not very efficient
     pub fn get_entities_with_component<T: Component>(&self) -> Vec<Entity> {
-        match self
-            .entities_with_components
-            .get(&std::any::TypeId::of::<T>())
-        {
+        match self.entities_with_components.get(&TypeId::of::<T>()) {
             Some(entities) => entities.clone(),
             None => vec![],
         }
     }
 
     pub fn get_entity_count_with_component<T: Component>(&self) -> usize {
-        match self
-            .entities_with_components
-            .get(&std::any::TypeId::of::<T>())
-        {
+        match self.entities_with_components.get(&TypeId::of::<T>()) {
             Some(entities) => entities.len(),
             None => 0,
         }
     }
 
     pub fn get_nth_entity_with_component<T: Component>(&self, index: usize) -> Option<Entity> {
-        match self
-            .entities_with_components
-            .get(&std::any::TypeId::of::<T>())
-        {
+        match self.entities_with_components.get(&TypeId::of::<T>()) {
             Some(entities) => {
                 if let Some(entity) = entities.get(index) {
                     Some(entity.clone())
@@ -253,7 +245,7 @@ macro_rules! get_components {
         {
             let mut all_types = vec![];
             $(
-                all_types.push(std::any::TypeId::of::<$component>());
+                all_types.push(TypeId::of::<$component>());
             )*
 
             for i in 0..all_types.len() {
@@ -323,7 +315,7 @@ macro_rules! get_components_mut {
         {
             let mut all_types = vec![];
             $(
-                all_types.push(std::any::TypeId::of::<$component>());
+                all_types.push(TypeId::of::<$component>());
             )*
 
             for i in 0..all_types.len() {
