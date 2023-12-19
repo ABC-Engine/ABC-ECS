@@ -80,17 +80,17 @@ impl EntitiesAndComponents {
     /// Returns an AnyMap, which can be used to get a reference to a component
     /// This should rarely if ever be used
     pub fn get_components(&self, entity: Entity) -> &AnyMap {
-        self.components
-            .get(entity.entity_id)
-            .expect("Entity ID does not exist, was the Entity ID edited?")
+        self.components.get(entity.entity_id).expect(
+            format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
+        )
     }
 
     /// Gets a mutable reference to the components on an entity
     /// If the entity does not exist, it will panic
     pub fn get_components_mut(&mut self, entity: Entity) -> &mut AnyMap {
-        self.components
-            .get_mut(entity.entity_id)
-            .expect("Entity ID does not exist, was the Entity ID edited?")
+        self.components.get_mut(entity.entity_id).expect(
+            format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
+        )
     }
 
     /// Gets a reference to a component on an entity
@@ -98,7 +98,9 @@ impl EntitiesAndComponents {
     pub fn try_get_component<T: 'static>(&self, entity: Entity) -> Option<&Box<T>> {
         self.components
             .get(entity.entity_id)
-            .expect("Entity ID does not exist, was the Entity ID edited?")
+            .expect(
+                format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
+            )
             .get::<Box<T>>()
     }
 
@@ -107,42 +109,47 @@ impl EntitiesAndComponents {
     pub fn try_get_component_mut<T: 'static>(&mut self, entity: Entity) -> Option<&mut Box<T>> {
         self.components
             .get_mut(entity.entity_id)
-            .expect("Entity ID does not exist, was the Entity ID edited?")
+            .expect(
+                format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
+            )
             .get_mut::<Box<T>>()
     }
 
     /// Gets a reference to a component on an entity
     /// If the component does not exist on the entity, it will panic
     pub fn get_component<T: 'static>(&self, entity: Entity) -> &T {
+        let type_name = std::any::type_name::<T>();
         self.components
             .get(entity.entity_id)
-            .expect("Entity ID does not exist, was the Entity ID edited?")
+            .expect(format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str())
             .get::<Box<T>>()
             .expect(
-                "Component does not exist on the object, was the Component added to the entity?",
+                &format!(
+                    "Component {type_name} does not exist on the object, was the Component added to the entity?"
+                ),
             )
     }
 
     /// Gets a mutable reference to a component on an entity
     /// If the component does not exist on the entity, it will panic
     pub fn get_component_mut<T: 'static>(&mut self, entity: Entity) -> &mut T {
+        let type_name = std::any::type_name::<T>();
         self.components
             .get_mut(entity.entity_id)
-            .expect("Entity ID does not exist, was the Entity ID edited?")
+            .expect(format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str())
             .get_mut::<Box<T>>()
-            .expect(
-                "Component does not exist on the object, was the Component added to the entity?",
-            )
+            .expect(&format!(
+                "Component {type_name} does not exist on the object, was the Component added to the entity?"
+            ))
     }
 
     /// Adds a component to an entity
     /// If the component already exists on the entity, it will be overwritten
     pub fn add_component_to<T: Component>(&mut self, entity: Entity, component: T) {
         // add the component to the entity
-        let components = self
-            .components
-            .get_mut(entity.entity_id)
-            .expect("Entity ID does not exist, was the Entity ID edited?");
+        let components = self.components.get_mut(entity.entity_id).expect(
+            format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
+        );
         components.insert(Box::new(component));
 
         // add the entity to the list of entities with the component
@@ -158,10 +165,9 @@ impl EntitiesAndComponents {
 
     pub fn remove_component_from<T: Component>(&mut self, entity: Entity) {
         // remove the component from the entity
-        let components = self
-            .components
-            .get_mut(entity.entity_id)
-            .expect("Entity ID does not exist, was the Entity ID edited?");
+        let components = self.components.get_mut(entity.entity_id).expect(
+            format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
+        );
         components.remove::<Box<T>>();
 
         // remove the entity from the list of entities with the component
@@ -245,7 +251,7 @@ macro_rules! get_components {
         {
             let mut all_types = vec![];
             $(
-                all_types.push(TypeId::of::<$component>());
+                all_types.push(std::any::TypeId::of::<$component>());
             )*
 
             for i in 0..all_types.len() {
@@ -315,7 +321,7 @@ macro_rules! get_components_mut {
         {
             let mut all_types = vec![];
             $(
-                all_types.push(TypeId::of::<$component>());
+                all_types.push(std::any::TypeId::of::<$component>());
             )*
 
             for i in 0..all_types.len() {
