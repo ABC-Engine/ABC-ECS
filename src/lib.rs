@@ -343,6 +343,70 @@ macro_rules! get_components_mut {
     };
 }
 
+/// This is a macro used to try to get a variable ammount of components from an entity
+/// It returns a tuple of option references to the components
+/// ```rust
+/// use ABC_ECS::{try_get_components, GameEngine, Component};
+/// struct Position {
+///    x: f32,
+///    y: f32,
+/// }
+/// impl Component for Position {}
+/// struct Velocity {
+///   x: f32,
+///   y: f32,
+/// }
+/// impl Component for Velocity {}
+/// fn main() {
+///    let mut engine = GameEngine::new();
+///   let entities_and_components = &mut engine.entities_and_components;
+///   let entity = entities_and_components.add_entity();
+///   entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
+///   entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+///   let (position, velocity) = try_get_components!(engine.entities_and_components, entity, Position, Velocity);
+///   assert_eq!(position.unwrap().x, 0.0);
+///   assert_eq!(position.unwrap().y, 0.0);
+///   assert_eq!(velocity.unwrap().x, 1.0);
+///   assert_eq!(velocity.unwrap().y, 1.0);
+/// }
+/// ```
+/// WARNING: This macro is not safe to use if you are borrowing the same component mutably more than once
+/// It will panic if you do this in a single call to the macro, but it will not panic if you do it in seperate calls
+#[macro_export]
+macro_rules! try_get_components {
+    ($engine:expr, $entity:expr, $($component:ty),*) => {
+        {
+            let mut all_types = vec![];
+            $(
+                all_types.push(std::any::TypeId::of::<$component>());
+            )*
+
+            for i in 0..all_types.len() {
+                for j in i+1..all_types.len() {
+                    assert_ne!(all_types[i], all_types[j], "You cannot borrow the same component mutably more than once!");
+                }
+            }
+
+            (
+                $(
+                    {
+                        if let Some(component) = $engine.try_get_component::<$component>($entity) {
+                            let pointer: *const $component = &**component;
+                            let reference = unsafe { &*pointer };
+                            Some(reference)
+                        } else {
+                            None
+                        }
+                        /*let pointer: *const $component = &*$engine.try_get_component::<$component>($entity).expect("Component does not exist on the entity");
+                        let reference = unsafe { &*pointer };
+                        reference*/
+                    },
+                )*
+            )
+        }
+    };
+}
+
 pub struct GameEngine {
     pub entities_and_components: EntitiesAndComponents,
     systems: Vec<Box<dyn System>>,
