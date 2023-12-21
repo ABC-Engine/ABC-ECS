@@ -10,5 +10,5 @@ description = "A simple, fast, and flexible Entity-Component-System library for 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anymap = "0.12.1"
+anymap = "1.0.0-beta.1"
 slotmap = "1.0.6"

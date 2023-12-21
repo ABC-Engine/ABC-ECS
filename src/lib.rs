@@ -161,6 +161,7 @@ impl EntitiesAndComponents {
                 entry.insert(vec![entity]);
             }
         }
+        self.type_ids_on_entity[entity.entity_id].push(TypeId::of::<T>());
     }
 
     pub fn remove_component_from<T: Component>(&mut self, entity: Entity) {
@@ -177,6 +178,7 @@ impl EntitiesAndComponents {
             }
             None => {}
         }
+        self.type_ids_on_entity[entity.entity_id].retain(|t| *t != TypeId::of::<T>());
     }
 
     /// returns a vector of all the entities that have a certain component
@@ -520,5 +522,29 @@ mod tests {
         let position = entities_and_components.get_component::<Position>(entity);
         assert_eq!(position.x, 6.0);
         assert_eq!(position.y, 1.0);
+    }
+
+    #[test]
+    fn test_segfault() {
+        let mut engine = GameEngine::new();
+        let entities_and_components = &mut engine.entities_and_components;
+
+        let entity = entities_and_components.add_entity();
+
+        entities_and_components.add_component_to(entity, Position { x: 1.0, y: 0.0 });
+        entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+
+        let (position, velocity) =
+            get_components_mut!(engine.entities_and_components, entity, Position, Velocity);
+
+        let (position_2, velocity_2) =
+            get_components_mut!(engine.entities_and_components, entity, Position, Velocity);
+
+        position.x += position_2.x;
+        position.y += position_2.y;
+
+        for i in 0..5 {
+            println!("Unsafe Position: {}, {}", position.x, position.y);
+        }
     }
 }
