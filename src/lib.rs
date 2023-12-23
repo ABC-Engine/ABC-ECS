@@ -1,12 +1,170 @@
 use anymap::AnyMap;
 use slotmap::{DefaultKey, SecondaryMap, SlotMap};
+use std::marker::PhantomData;
 use std::{any::TypeId, collections::HashMap};
+
+pub trait Components<'a, T> {
+    /// Returns a tuple of references to the components
+    fn get_components(entities_and_components: &'a EntitiesAndComponents, entity: Entity) -> T;
+}
+
+/*impl<'b, T: 'static> Components<'b, &'b T> for (T,) {
+    fn get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> &'b T {
+        let type_name = std::any::type_name::<T>();
+        entities_and_components.components
+            .get(entity.entity_id)
+            .expect(format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str())
+            .get::<Box<T>>()
+            .expect(
+                &format!(
+                    "Component {type_name} does not exist on the object, was the Component added to the entity?"
+                ),
+            )
+    }
+}
+
+impl<'b, T1: 'static, T2: 'static> Components<'b, (&'b T1, &'b T2)> for (T1, T2) {
+    fn get_components(
+        entities_and_components: &'b EntitiesAndComponents,
+        entity: Entity,
+    ) -> (&'b T1, &'b T2) {
+        let components = entities_and_components
+            .components
+            .get(entity.entity_id)
+            .unwrap_or_else(|| {
+                panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?")
+            });
+        let component_1 = components
+            .get::<Box<T1>>()
+            .unwrap_or_else(||{
+                let type_name = std::any::type_name::<T1>();
+                panic!(
+                    "Component {type_name} does not exist on the object, was the Component added to the entity?"
+                )
+            });
+        let type_name = std::any::type_name::<T2>();
+        let component_2 = components
+            .get::<Box<T2>>()
+            .unwrap_or_else(||{
+                let type_name = std::any::type_name::<T2>();
+                panic!(
+                    "Component {type_name} does not exist on the object, was the Component added to the entity?"
+                )
+            });
+        (component_1, component_2)
+    }
+}*/
+
+// implement it for 3 components
+// implement it for 4 components
+// and so on... with a macro
+
+macro_rules! impl_components {
+    ($($generic_name: ident),*) => {
+        impl<'b, $($generic_name: 'static),*> Components<'b, ($(&'b $generic_name,)*)> for ($($generic_name,)*) {
+            fn get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> ($(&'b $generic_name,)*) {
+                let components = entities_and_components
+                    .components
+                    .get(entity.entity_id)
+                    .expect(
+                        format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
+                    );
+
+                (
+                    $(
+                        components
+                            .get::<Box<$generic_name>>()
+                            .unwrap_or_else(||{
+                                let type_name = std::any::type_name::<$generic_name>();
+                                panic!(
+                                    "Component {type_name} does not exist on the object, was the Component added to the entity?"
+                                )
+                            }),
+                    )*
+                )
+            }
+        }
+    };
+}
+
+// implement it for 1-32 components
+impl_components!(T1);
+impl_components!(T1, T2);
+impl_components!(T1, T2, T3);
+impl_components!(T1, T2, T3, T4);
+impl_components!(T1, T2, T3, T4, T5);
+impl_components!(T1, T2, T3, T4, T5, T6);
+impl_components!(T1, T2, T3, T4, T5, T6, T7);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17);
+impl_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28, T29
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28, T29, T30
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28, T29, T30, T31
+);
+impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28, T29, T30, T31, T32
+);
 
 // The Entity will just be an ID that can be
 // indexed into arrays of components for now...
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Entity {
-    entity_id: DefaultKey,
+    pub entity_id: DefaultKey,
 }
 
 pub struct EntitiesAndComponents {
@@ -15,7 +173,7 @@ pub struct EntitiesAndComponents {
     // This would make it easier to iterate over all entities with a certain component,
     // without having to iterate over all entities
     entities: SlotMap<DefaultKey, Entity>,
-    components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
+    pub(crate) components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
     entities_with_components: HashMap<TypeId, Vec<Entity>>,
     type_ids_on_entity: SecondaryMap<DefaultKey, Vec<TypeId>>,
 }
@@ -212,69 +370,6 @@ impl EntitiesAndComponents {
     }
 }
 
-/// This macro is used to get a variable ammount of components from an entity
-/// It returns a tuple of references to the components
-/// ```rust
-/// use ABC_ECS::{get_components, GameEngine, Component};
-///
-/// struct Position {
-///     x: f32,
-///     y: f32,
-/// }
-///
-/// impl Component for Position {}
-///
-/// struct Velocity {
-///     x: f32,
-///     y: f32,
-/// }
-///
-/// impl Component for Velocity {}
-///
-///
-/// fn main() {
-///     let mut engine = GameEngine::new();
-///     let entities_and_components = &mut engine.entities_and_components;
-///
-///     let entity = entities_and_components.add_entity();
-///
-///     entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
-///     entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
-///
-///     let (position, velocity) = get_components!(engine.entities_and_components, entity, Position, Velocity);
-///
-///     println!("Position: {}, {}", position.x, position.y);
-///     println!("Velocity: {}, {}", velocity.x, velocity.y);
-/// }
-/// ```
-#[macro_export]
-macro_rules! get_components {
-    ($engine:expr, $entity:expr, $($component:ty),*) => {
-        {
-            let mut all_types = vec![];
-            $(
-                all_types.push(std::any::TypeId::of::<$component>());
-            )*
-
-            for i in 0..all_types.len() {
-                for j in i+1..all_types.len() {
-                    assert_ne!(all_types[i], all_types[j], "You cannot borrow the same component more than once!");
-                }
-            }
-
-            (
-                $(
-                    {
-                        let pointer: *const $component = &*$engine.get_component::<$component>($entity);
-                        let reference = unsafe { &*pointer };
-                        reference
-                    },
-                )*
-            )
-        }
-    };
-}
-
 /// This macro is used to muttably borrow a variable ammount of components from an entity
 ///
 /// It returns a tuple of references to the components
@@ -399,9 +494,6 @@ macro_rules! try_get_components {
                         } else {
                             None
                         }
-                        /*let pointer: *const $component = &*$engine.try_get_component::<$component>($entity).expect("Component does not exist on the entity");
-                        let reference = unsafe { &*pointer };
-                        reference*/
                     },
                 )*
             )
@@ -469,8 +561,8 @@ mod tests {
 
                 // be very careful when using this macro like this
                 // using it this way could cause a data race if you are not careful
-                let (velocity,) = get_components!(engine, entity, Velocity);
-                let (position,) = get_components_mut!(engine, entity, Position);
+                //let (velocity,) = get_components!(engine, entity, Velocity);
+                let (position, velocity) = get_components_mut!(engine, entity, Position, Velocity);
 
                 position.x += velocity.x;
                 position.y += velocity.y;
@@ -481,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
+    fn test_components_mut() {
         let mut engine = GameEngine::new();
         let entities_and_components = &mut engine.entities_and_components;
 
@@ -525,7 +617,30 @@ mod tests {
     }
 
     #[test]
-    fn test_segfault() {
+    fn test_multiple_entities() {
+        let mut engine = GameEngine::new();
+        let entities_and_components = &mut engine.entities_and_components;
+
+        let entity = entities_and_components.add_entity();
+        let entity_2 = entities_and_components.add_entity();
+
+        entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
+        entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+
+        entities_and_components.add_component_to(entity_2, Position { x: 0.0, y: 0.0 });
+        entities_and_components.add_component_to(entity_2, Velocity { x: 1.0, y: 1.0 });
+
+        // this should compile but, currently you can't borrow from two different entities mutably at the same time
+        let position = entities_and_components.get_component_mut::<Position>(entity);
+        //let position_2 = entities_and_components.get_component_mut::<Position>(entity_2);
+
+        println!("Position: {}, {}", position.x, position.y);
+        //println!("Position: {}, {}", position_2.x, position_2.y);
+    }
+
+    // this test should not compile
+    /*#[test]
+    fn test_compile_fail_multiple_muts() {
         let mut engine = GameEngine::new();
         let entities_and_components = &mut engine.entities_and_components;
 
@@ -543,8 +658,33 @@ mod tests {
         position.x += position_2.x;
         position.y += position_2.y;
 
-        for i in 0..5 {
-            println!("Unsafe Position: {}, {}", position.x, position.y);
+        println!("Position: {}, {}", position.x, position_2.y);
+    }*/
+
+    // this test should not compile
+    /*#[test]
+    fn test_lifetimes() {
+        let (position, velocity): (&mut Position, &mut Velocity);
+        {
+            let mut engine = GameEngine::new();
+            let entities_and_components = &mut engine.entities_and_components;
+
+            let entity = entities_and_components.add_entity();
+
+            entities_and_components.add_component_to(entity, Position { x: 1.0, y: 0.0 });
+            entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+
+            let (position, velocity) =
+                <(Position, Velocity)>::get_components(entities_and_components, entity);
+
+            //(position, velocity) =
+            //    get_components_mut!(engine.entities_and_components, entity, Position, Velocity);
         }
-    }
+
+        // should not be possible, but the lifetimes aren't linked
+        position.x += velocity.x;
+        position.y += velocity.y;
+
+        println!("Position: {}, {}", position.x, position.y);
+    }*/
 }
