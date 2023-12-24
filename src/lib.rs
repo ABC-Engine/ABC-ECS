@@ -3,65 +3,14 @@ use slotmap::{DefaultKey, SecondaryMap, SlotMap};
 use std::marker::PhantomData;
 use std::{any::TypeId, collections::HashMap};
 
-pub trait Components<'a, T> {
+pub trait ComponentsRef<'a, T> {
     /// Returns a tuple of references to the components
     fn get_components(entities_and_components: &'a EntitiesAndComponents, entity: Entity) -> T;
 }
 
-/*impl<'b, T: 'static> Components<'b, &'b T> for (T,) {
-    fn get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> &'b T {
-        let type_name = std::any::type_name::<T>();
-        entities_and_components.components
-            .get(entity.entity_id)
-            .expect(format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str())
-            .get::<Box<T>>()
-            .expect(
-                &format!(
-                    "Component {type_name} does not exist on the object, was the Component added to the entity?"
-                ),
-            )
-    }
-}
-
-impl<'b, T1: 'static, T2: 'static> Components<'b, (&'b T1, &'b T2)> for (T1, T2) {
-    fn get_components(
-        entities_and_components: &'b EntitiesAndComponents,
-        entity: Entity,
-    ) -> (&'b T1, &'b T2) {
-        let components = entities_and_components
-            .components
-            .get(entity.entity_id)
-            .unwrap_or_else(|| {
-                panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?")
-            });
-        let component_1 = components
-            .get::<Box<T1>>()
-            .unwrap_or_else(||{
-                let type_name = std::any::type_name::<T1>();
-                panic!(
-                    "Component {type_name} does not exist on the object, was the Component added to the entity?"
-                )
-            });
-        let type_name = std::any::type_name::<T2>();
-        let component_2 = components
-            .get::<Box<T2>>()
-            .unwrap_or_else(||{
-                let type_name = std::any::type_name::<T2>();
-                panic!(
-                    "Component {type_name} does not exist on the object, was the Component added to the entity?"
-                )
-            });
-        (component_1, component_2)
-    }
-}*/
-
-// implement it for 3 components
-// implement it for 4 components
-// and so on... with a macro
-
 macro_rules! impl_components {
     ($($generic_name: ident),*) => {
-        impl<'b, $($generic_name: 'static),*> Components<'b, ($(&'b $generic_name,)*)> for ($($generic_name,)*) {
+        impl<'b, $($generic_name: 'static),*> ComponentsRef<'b, ($(&'b $generic_name,)*)> for ($($generic_name,)*) {
             fn get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> ($(&'b $generic_name,)*) {
                 let components = entities_and_components
                     .components
@@ -87,7 +36,37 @@ macro_rules! impl_components {
     };
 }
 
-// implement it for 1-32 components
+pub trait ComponentsTry<'a, T> {
+    /// Returns a tuple of references to the components
+    fn try_get_components(entities_and_components: &'a EntitiesAndComponents, entity: Entity) -> T;
+}
+
+macro_rules! impl_try_components {
+    ($($generic_name: ident),*) => {
+        impl<'b, $($generic_name: 'static),*> ComponentsTry<'b, ($(Option<&'b $generic_name>,)*)> for ($($generic_name,)*) {
+            fn try_get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> ($(Option<&'b $generic_name>,)*) {
+                let components = entities_and_components
+                    .components
+                    .get(entity.entity_id)
+                    .expect(
+                        format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
+                    );
+
+
+                (
+                    $(
+                        components
+                            .get::<Box<$generic_name>>().map(|boxed_t1|{ &**boxed_t1}),
+                    )*
+                )
+            }
+        }
+    };
+}
+
+// make a macro to
+// implement to call impl_components! with 1 component - 32 components
+
 impl_components!(T1);
 impl_components!(T1, T2);
 impl_components!(T1, T2, T3);
@@ -156,6 +135,80 @@ impl_components!(
     T22, T23, T24, T25, T26, T27, T28, T29, T30, T31
 );
 impl_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28, T29, T30, T31, T32
+);
+
+impl_try_components!(T1);
+impl_try_components!(T1, T2);
+impl_try_components!(T1, T2, T3);
+impl_try_components!(T1, T2, T3, T4);
+impl_try_components!(T1, T2, T3, T4, T5);
+impl_try_components!(T1, T2, T3, T4, T5, T6);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+impl_try_components!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28, T29
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28, T29, T30
+);
+impl_try_components!(
+    T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
+    T22, T23, T24, T25, T26, T27, T28, T29, T30, T31
+);
+impl_try_components!(
     T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21,
     T22, T23, T24, T25, T26, T27, T28, T29, T30, T31, T32
 );
@@ -440,67 +493,6 @@ macro_rules! get_components_mut {
     };
 }
 
-/// This is a macro used to try to get a variable ammount of components from an entity
-/// It returns a tuple of option references to the components
-/// ```rust
-/// use ABC_ECS::{try_get_components, GameEngine, Component};
-/// struct Position {
-///    x: f32,
-///    y: f32,
-/// }
-/// impl Component for Position {}
-/// struct Velocity {
-///   x: f32,
-///   y: f32,
-/// }
-/// impl Component for Velocity {}
-/// fn main() {
-///    let mut engine = GameEngine::new();
-///   let entities_and_components = &mut engine.entities_and_components;
-///   let entity = entities_and_components.add_entity();
-///   entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
-///   entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
-///   let (position, velocity) = try_get_components!(engine.entities_and_components, entity, Position, Velocity);
-///   assert_eq!(position.unwrap().x, 0.0);
-///   assert_eq!(position.unwrap().y, 0.0);
-///   assert_eq!(velocity.unwrap().x, 1.0);
-///   assert_eq!(velocity.unwrap().y, 1.0);
-/// }
-/// ```
-/// WARNING: This macro is not safe to use if you are borrowing the same component mutably more than once
-/// It will panic if you do this in a single call to the macro, but it will not panic if you do it in seperate calls
-#[macro_export]
-macro_rules! try_get_components {
-    ($engine:expr, $entity:expr, $($component:ty),*) => {
-        {
-            let mut all_types = vec![];
-            $(
-                all_types.push(std::any::TypeId::of::<$component>());
-            )*
-
-            for i in 0..all_types.len() {
-                for j in i+1..all_types.len() {
-                    assert_ne!(all_types[i], all_types[j], "You cannot borrow the same component mutably more than once!");
-                }
-            }
-
-            (
-                $(
-                    {
-                        if let Some(component) = $engine.try_get_component::<$component>($entity) {
-                            let pointer: *const $component = &**component;
-                            let reference = unsafe { &*pointer };
-                            Some(reference)
-                        } else {
-                            None
-                        }
-                    },
-                )*
-            )
-        }
-    };
-}
-
 pub struct GameEngine {
     pub entities_and_components: EntitiesAndComponents,
     systems: Vec<Box<dyn System>>,
@@ -587,18 +579,25 @@ mod tests {
         for i in 0..5 {
             engine.run();
         }
+    }
 
-        // not sure how to test this yet...
-        // in the current state of the code, this causes a mutable borrow error
-        // not sure if that is a positive design choice or not
+    #[test]
+    fn test_try_get_components() {
+        let mut engine = GameEngine::new();
+        let entities_and_components = &mut engine.entities_and_components;
 
-        /*let position = entities_and_components.get_component::<Position>(entity);
-        assert_eq!(position.x, 5.0);
-        assert_eq!(position.y, 5.0);
+        let entity = entities_and_components.add_entity();
 
-        let velocity = entities_and_components.get_component::<Velocity>(entity);
-        assert_eq!(velocity.x, 1.0);
-        assert_eq!(velocity.y, 1.0);*/
+        entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
+        entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+
+        let (position, velocity) =
+            <(Position, Velocity)>::try_get_components(entities_and_components, entity);
+
+        assert_eq!(position.unwrap().x, 0.0);
+        assert_eq!(position.unwrap().y, 0.0);
+        assert_eq!(velocity.unwrap().x, 1.0);
+        assert_eq!(velocity.unwrap().y, 1.0);
     }
 
     #[test]
