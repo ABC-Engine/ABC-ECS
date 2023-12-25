@@ -21,9 +21,9 @@ macro_rules! impl_components {
                 let components = entities_and_components
                     .components
                     .get(entity.entity_id)
-                    .expect(
-                        format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-                    );
+                    .unwrap_or_else(||{
+                        panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+                    });
 
                 (
                     $(
@@ -60,9 +60,9 @@ macro_rules! impl_try_components {
                 let components = entities_and_components
                     .components
                     .get(entity.entity_id)
-                    .expect(
-                        format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-                    );
+                    .unwrap_or_else(||{
+                        panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+                });
 
 
                 (
@@ -108,9 +108,9 @@ macro_rules! impl_components_mut {
                 let components = entities_and_components
                     .components
                     .get_mut(entity.entity_id)
-                    .expect(
-                        format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-                    );
+                    .unwrap_or_else(||{
+                        panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+                });
 
                 (
                     $(
@@ -169,9 +169,9 @@ macro_rules! impl_try_components_mut {
                 let components = entities_and_components
                     .components
                     .get_mut(entity.entity_id)
-                    .expect(
-                        format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-                    );
+                    .unwrap_or_else(||{
+                        panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+                });
 
                 (
                     $(
@@ -574,17 +574,19 @@ impl EntitiesAndComponents {
     /// Returns an AnyMap, which can be used to get a reference to a component
     /// This should rarely if ever be used
     pub fn get_all_components(&self, entity: Entity) -> &AnyMap {
-        self.components.get(entity.entity_id).expect(
-            format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-        )
+        self.components.get(entity.entity_id).unwrap_or_else(|| {
+            panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+        })
     }
 
     /// Gets a mutable reference to the components on an entity
     /// If the entity does not exist, it will panic
     pub fn get_all_components_mut(&mut self, entity: Entity) -> &mut AnyMap {
-        self.components.get_mut(entity.entity_id).expect(
-            format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-        )
+        self.components
+            .get_mut(entity.entity_id)
+            .unwrap_or_else(|| {
+                panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+            })
     }
 
     /// Gets a reference to a component on an entity
@@ -592,9 +594,9 @@ impl EntitiesAndComponents {
     pub fn try_get_component<T: 'static>(&self, entity: Entity) -> Option<&Box<T>> {
         self.components
             .get(entity.entity_id)
-            .expect(
-                format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-            )
+            .unwrap_or_else(|| {
+                panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+            })
             .get::<Box<T>>()
     }
 
@@ -603,9 +605,9 @@ impl EntitiesAndComponents {
     pub fn try_get_component_mut<T: 'static>(&mut self, entity: Entity) -> Option<&mut Box<T>> {
         self.components
             .get_mut(entity.entity_id)
-            .expect(
-                format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-            )
+            .unwrap_or_else(|| {
+                panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+            })
             .get_mut::<Box<T>>()
     }
 
@@ -645,9 +647,12 @@ impl EntitiesAndComponents {
     /// If the component already exists on the entity, it will be overwritten
     pub fn add_component_to<T: Component>(&mut self, entity: Entity, component: T) {
         // add the component to the entity
-        let components = self.components.get_mut(entity.entity_id).expect(
-            format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-        );
+        let components = self
+            .components
+            .get_mut(entity.entity_id)
+            .unwrap_or_else(|| {
+                panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+            });
         components.insert(Box::new(component));
 
         // add the entity to the list of entities with the component
@@ -664,9 +669,12 @@ impl EntitiesAndComponents {
 
     pub fn remove_component_from<T: Component>(&mut self, entity: Entity) {
         // remove the component from the entity
-        let components = self.components.get_mut(entity.entity_id).expect(
-            format!("Entity ID {entity:?} does not exist, was the Entity ID edited?").as_str(),
-        );
+        let components = self
+            .components
+            .get_mut(entity.entity_id)
+            .unwrap_or_else(|| {
+                panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+            });
         components.remove::<Box<T>>();
 
         // remove the entity from the list of entities with the component
@@ -848,7 +856,7 @@ mod tests {
         entities_and_components.add_component_to(entity_2, Velocity { x: 1.0, y: 1.0 });
 
         // this should compile but, currently you can't borrow from two different entities mutably at the same time
-        let position = entities_and_components.get_component_mut::<Position>(entity);
+        let (position,) = entities_and_components.get_components_mut::<(Position,)>(entity);
         //let position_2 = entities_and_components.get_component_mut::<Position>(entity_2);
 
         println!("Position: {}, {}", position.x, position.y);

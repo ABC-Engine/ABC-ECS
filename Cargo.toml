@@ -1,3 +1,4 @@
+workspace = { members = ["examples/benchmark"] }
 [package]
 name = "ABC-ECS"
 version = "0.1.2"
@@ -12,3 +13,9 @@ description = "A simple, fast, and flexible Entity-Component-System library for 
 [dependencies]
 anymap = "1.0.0-beta.1"
 slotmap = "1.0.6"
+
+[dev-dependencies]
+rand = "0.8.4"
+
+[profile.release]
+debug = true
