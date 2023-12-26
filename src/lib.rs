@@ -94,10 +94,11 @@ macro_rules! impl_components_mut {
             fn get_components_mut(entities_and_components: &'b mut EntitiesAndComponents, entity: Entity) -> Self::Result {
 
                 // make sure that the same component is not borrowed mutably more than once
-                let mut all_types = vec![];
-                $(
-                    all_types.push(std::any::TypeId::of::<$generic_name>());
-                )*
+                let mut all_types = [
+                    $(
+                        std::any::TypeId::of::<$generic_name>(),
+                    )*
+                ];
 
                 for i in 0..all_types.len() {
                     for j in i+1..all_types.len() {
@@ -155,10 +156,11 @@ macro_rules! impl_try_components_mut {
             fn try_get_components_mut(entities_and_components: &'b mut EntitiesAndComponents, entity: Entity) -> Self::Result {
 
                 // make sure that the same component is not borrowed mutably more than once
-                let mut all_types = vec![];
-                $(
-                    all_types.push(std::any::TypeId::of::<$generic_name>());
-                )*
+                let mut all_types = [
+                    $(
+                        std::any::TypeId::of::<$generic_name>(),
+                    )*
+                ];
 
                 for i in 0..all_types.len() {
                     for j in i+1..all_types.len() {
@@ -193,6 +195,37 @@ macro_rules! impl_try_components_mut {
                         },
                     )*
                 )
+            }
+        }
+    };
+}
+
+pub trait OwnedComponents {
+    type Input;
+
+    /// Returns a tuple of owned components
+    fn make_entity_with_components(
+        entities_and_components: &mut EntitiesAndComponents,
+        components: Self::Input,
+    ) -> Entity;
+}
+
+macro_rules! impl_owned_components {
+    ($($generic_name: ident, $component_num: tt),*) => {
+        impl<$($generic_name: 'static),*> OwnedComponents for ($($generic_name,)*) {
+            type Input = ($($generic_name,)*);
+
+            fn make_entity_with_components(
+                entities_and_components: &mut EntitiesAndComponents,
+                components: Self::Input,
+            ) -> Entity {
+                let entity = entities_and_components.add_entity();
+
+                $(
+                    entities_and_components.add_component_to(entity, (components.$component_num));
+                )*
+
+                entity
             }
         }
     };
@@ -496,6 +529,112 @@ impl_try_components_mut!(
     T22, T23, T24, T25, T26, T27, T28, T29, T30, T31, T32
 );
 
+impl_owned_components!(T1, 0);
+impl_owned_components!(T1, 0, T2, 1);
+impl_owned_components!(T1, 0, T2, 1, T3, 2);
+impl_owned_components!(T1, 0, T2, 1, T3, 2, T4, 3);
+impl_owned_components!(T1, 0, T2, 1, T3, 2, T4, 3, T5, 4);
+impl_owned_components!(T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5);
+impl_owned_components!(T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6);
+impl_owned_components!(T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7);
+impl_owned_components!(T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8);
+impl_owned_components!(T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23, T25, 24
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23, T25, 24, T26, 25
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23, T25, 24, T26, 25, T27, 26
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23, T25, 24, T26, 25, T27, 26, T28, 27
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23, T25, 24, T26, 25, T27, 26, T28, 27, T29, 28
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23, T25, 24, T26, 25, T27, 26, T28, 27, T29, 28, T30, 29
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23, T25, 24, T26, 25, T27, 26, T28, 27, T29, 28, T30, 29, T31, 30
+);
+impl_owned_components!(
+    T1, 0, T2, 1, T3, 2, T4, 3, T5, 4, T6, 5, T7, 6, T8, 7, T9, 8, T10, 9, T11, 10, T12, 11, T13,
+    12, T14, 13, T15, 14, T16, 15, T17, 16, T18, 17, T19, 18, T20, 19, T21, 20, T22, 21, T23, 22,
+    T24, 23, T25, 24, T26, 25, T27, 26, T28, 27, T29, 28, T30, 29, T31, 30, T32, 31
+);
+
 // The Entity will just be an ID that can be
 // indexed into arrays of components for now...
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -532,6 +671,11 @@ impl EntitiesAndComponents {
         self.type_ids_on_entity.insert(entity_id, vec![]);
 
         Entity { entity_id }
+    }
+
+    pub fn add_entity_with<T: OwnedComponents<Input = T>>(&mut self, components: T) -> Entity {
+        let entity = <T>::make_entity_with_components(self, components);
+        entity
     }
 
     pub fn remove_entity(&mut self, entity: Entity) {
@@ -704,7 +848,9 @@ impl EntitiesAndComponents {
         }
     }
 
-    pub fn get_nth_entity_with_component<T: Component>(&self, index: usize) -> Option<Entity> {
+    /// gets the nth entity with a certain component
+    /// doesn't use nth so not O(n)
+    pub fn get_entity_with_component<T: Component>(&self, index: usize) -> Option<Entity> {
         match self.entities_with_components.get(&TypeId::of::<T>()) {
             Some(entities) => {
                 if let Some(entity) = entities.get(index) {
@@ -746,6 +892,8 @@ impl GameEngine {
 
 pub trait Component: 'static {}
 
+impl<T: 'static> Component for T {}
+
 /// Systems access and change components on objects
 pub trait System {
     fn run(&mut self, engine: &mut EntitiesAndComponents);
@@ -760,14 +908,14 @@ mod tests {
         y: f32,
     }
 
-    impl Component for Position {}
+    //impl Component for Position {}
 
     struct Velocity {
         x: f32,
         y: f32,
     }
 
-    impl Component for Velocity {}
+    //impl Component for Velocity {}
 
     struct MovementSystem {}
 
@@ -861,6 +1009,23 @@ mod tests {
 
         println!("Position: {}, {}", position.x, position.y);
         //println!("Position: {}, {}", position_2.x, position_2.y);
+    }
+
+    #[test]
+    fn test_add_entity_with_components() {
+        let mut engine = GameEngine::new();
+        let entities_and_components = &mut engine.entities_and_components;
+
+        let entity = entities_and_components
+            .add_entity_with((Position { x: 0.0, y: 0.0 }, Velocity { x: 1.0, y: 1.0 }));
+
+        let (position, velocity) =
+            entities_and_components.get_components::<(Position, Velocity)>(entity);
+
+        assert_eq!(position.x, 0.0);
+        assert_eq!(position.y, 0.0);
+        assert_eq!(velocity.x, 1.0);
+        assert_eq!(velocity.y, 1.0);
     }
 
     // this test should not compile

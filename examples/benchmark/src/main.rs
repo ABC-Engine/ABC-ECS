@@ -1,4 +1,3 @@
-use rand::Rng;
 use std::time::Instant;
 use ABC_ECS::*;
 
@@ -7,35 +6,52 @@ struct Position {
     y: f32,
 }
 
-impl Component for Position {}
-
 struct Velocity {
     x: f32,
     y: f32,
 }
 
-impl Component for Velocity {}
-
 struct Health {
     health: f32,
 }
 
-impl Component for Health {}
+struct position_system;
 
+impl System for position_system {
+    fn run(&mut self, entities_and_components: &mut EntitiesAndComponents) {
+        for i in 0..entities_and_components.get_entity_count_with_component::<Position>() {
+            let entity = entities_and_components
+                .get_entity_with_component::<Position>(i)
+                .expect("Failed to get entity with component Position. This should never happen.");
+
+            let (position,) = entities_and_components.get_components_mut::<(Position,)>(entity);
+
+            position.x += 1.0;
+            position.y += 1.0;
+        }
+    }
+}
+
+#[inline(never)]
 fn main() {
     // test the performance with a varrying number of components
 
-    for i in 0..100 {
-        let start_time = Instant::now();
+    for i in 0..500 {
+        if i % 10 != 0 {
+            continue;
+        }
+
+        let mut total_time_search = 0;
+        let mut total_time_add = 0;
+        let mut total_time_systems_run = 0;
         // arbitrary number of iterations to get a more accurate result
-        for i in 0..1000 {
-            if i % 10 != 0 {
-                continue;
-            }
+        for _ in 0..1000 {
             let mut world = GameEngine::new();
+            world.add_system(Box::new(position_system {}));
             {
                 let entities_and_components = &mut world.entities_and_components;
 
+                let start_time = Instant::now();
                 // add entities and components
                 for j in 0..i {
                     let entity = entities_and_components.add_entity();
@@ -49,14 +65,16 @@ fn main() {
                             .add_component_to(entity, Velocity { x: 0.0, y: 0.0 });
                     }
                 }
+                total_time_add += start_time.elapsed().as_micros();
 
-                // get entities and components
+                let start_time = Instant::now();
+                // get entities and components a constant number of times
                 for _ in 0..100 {
                     for j in
                         0..entities_and_components.get_entity_count_with_component::<Position>()
                     {
                         let entity =
-                            entities_and_components.get_nth_entity_with_component::<Position>(j).expect(
+                            entities_and_components.get_entity_with_component::<Position>(j).expect(
                                 "Failed to get entity with component Position. This should never happen.",
                             );
 
@@ -64,11 +82,34 @@ fn main() {
                             entities_and_components.get_components_mut::<(Position,)>(entity);
                     }
                 }
+                total_time_search += start_time.elapsed().as_micros();
+
+                let start_time = Instant::now();
+                for _ in 0..100 {
+                    world.run();
+                }
+                total_time_systems_run += start_time.elapsed().as_micros();
             }
         }
         print!("\n{}: ", i);
-        for i in 0..(start_time.elapsed().as_millis() / 5) {
+        /*for _ in 0..(total_time_search / 1000) {
             print!("|");
         }
+        print!(" {}ms for {} searches \n", total_time_search, 100000);*/
+
+        for _ in 0..(total_time_add / 10000) {
+            print!("|");
+        }
+        print!(
+            "      {}ms for {} entities added \n",
+            total_time_add,
+            (i * 1000)
+        );
+
+        for _ in 0..(total_time_systems_run / 10000) {
+            print!("|");
+        }
+
+        print!(" {}ms for systems run", total_time_systems_run);
     }
 }
