@@ -1,5 +1,7 @@
 use anymap::AnyMap;
+use rustc_hash::FxHashMap;
 use slotmap::{DefaultKey, SecondaryMap, SlotMap};
+use std::hash::{BuildHasher, BuildHasherDefault, Hash, Hasher};
 use std::{any::TypeId, collections::HashMap};
 
 pub trait ComponentsRef<'a> {
@@ -649,16 +651,17 @@ pub struct EntitiesAndComponents {
     // without having to iterate over all entities
     entities: SlotMap<DefaultKey, Entity>,
     pub(crate) components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
-    entities_with_components: HashMap<TypeId, Vec<Entity>>,
+    entities_with_components: FxHashMap<TypeId, SecondaryMap<DefaultKey, Entity>>,
     type_ids_on_entity: SecondaryMap<DefaultKey, Vec<TypeId>>,
 }
 
 impl EntitiesAndComponents {
     pub fn new() -> Self {
+        // not sure what the capacity should be here
         EntitiesAndComponents {
-            entities: SlotMap::new(),
-            components: SlotMap::new(),
-            entities_with_components: HashMap::new(),
+            entities: SlotMap::with_capacity(100),
+            components: SlotMap::with_capacity(100),
+            entities_with_components: FxHashMap::with_capacity_and_hasher(3, Default::default()),
             type_ids_on_entity: SecondaryMap::new(),
         }
     }
@@ -682,7 +685,7 @@ impl EntitiesAndComponents {
         for type_id in self.type_ids_on_entity[entity.entity_id].clone() {
             match self.entities_with_components.get_mut(&type_id) {
                 Some(entities) => {
-                    entities.retain(|e| *e != entity);
+                    entities.remove(entity.entity_id);
                 }
                 None => {}
             }
@@ -802,10 +805,12 @@ impl EntitiesAndComponents {
         // add the entity to the list of entities with the component
         match self.entities_with_components.entry(TypeId::of::<T>()) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
-                entry.get_mut().push(entity);
+                entry.get_mut().insert(entity.entity_id, entity);
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(vec![entity]);
+                let mut new_map = SecondaryMap::new();
+                new_map.insert(entity.entity_id, entity);
+                entry.insert(new_map);
             }
         }
         self.type_ids_on_entity[entity.entity_id].push(TypeId::of::<T>());
@@ -824,20 +829,20 @@ impl EntitiesAndComponents {
         // remove the entity from the list of entities with the component
         match self.entities_with_components.get_mut(&TypeId::of::<T>()) {
             Some(entities) => {
-                entities.retain(|e| *e != entity);
+                entities.remove(entity.entity_id);
             }
             None => {}
         }
         self.type_ids_on_entity[entity.entity_id].retain(|t| *t != TypeId::of::<T>());
     }
 
-    /// returns a vector of all the entities that have a certain component
-    /// if no entities have the component, it will return an empty vector
-    /// clones the vector, so it is not very efficient
-    pub fn get_entities_with_component<T: Component>(&self) -> Vec<Entity> {
+    /// returns an iterator over all entities with a certain component
+    pub fn get_entities_with_component<T: Component>(
+        &self,
+    ) -> Option<slotmap::secondary::Values<'_, DefaultKey, Entity>> {
         match self.entities_with_components.get(&TypeId::of::<T>()) {
-            Some(entities) => entities.clone(),
-            None => vec![],
+            Some(entities) => Some(entities.values()),
+            None => None,
         }
     }
 
@@ -849,11 +854,11 @@ impl EntitiesAndComponents {
     }
 
     /// gets the nth entity with a certain component
-    /// doesn't use nth so not O(n)
+    /// O(n) use get_entities_with_component if you need to iterate over all entities with a certain component
     pub fn get_entity_with_component<T: Component>(&self, index: usize) -> Option<Entity> {
         match self.entities_with_components.get(&TypeId::of::<T>()) {
             Some(entities) => {
-                if let Some(entity) = entities.get(index) {
+                if let Some(entity) = entities.values().nth(index) {
                     Some(entity.clone())
                 } else {
                     None
