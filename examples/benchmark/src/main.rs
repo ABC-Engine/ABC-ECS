@@ -1,5 +1,5 @@
 use colored::Colorize;
-use std::{thread, time::Instant};
+use std::time::Instant;
 use ABC_ECS::*;
 
 struct Position {
