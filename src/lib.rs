@@ -201,6 +201,7 @@ impl EntitiesAndComponents {
             }
             None => {}
         }
+        // this is O(n) but, depending on the number of components on an entity, n should be small
         self.type_ids_on_entity[entity.entity_id].retain(|t| *t != TypeId::of::<T>());
     }
 

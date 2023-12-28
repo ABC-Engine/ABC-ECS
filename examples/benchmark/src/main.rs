@@ -38,6 +38,16 @@ impl System for PositionSystem {
     }
 }
 
+struct RemoveEntitiesSystem;
+
+impl System for RemoveEntitiesSystem {
+    fn run(&mut self, entities_and_components: &mut EntitiesAndComponents) {
+        while let Some(entity) = entities_and_components.get_nth_entity(0) {
+            entities_and_components.remove_entity(entity);
+        }
+    }
+}
+
 fn main() {
     // test the performance with a varrying number of components
 
@@ -54,7 +64,8 @@ fn main() {
         let overall_start_time = Instant::now();
         for _ in 0..1000 {
             let mut world = GameEngine::new();
-            world.add_system(Box::new(PositionSystem {}));
+            //world.add_system(Box::new(PositionSystem {}));
+            world.add_system(Box::new(RemoveEntitiesSystem {}));
             {
                 let entities_and_components = &mut world.entities_and_components;
 
