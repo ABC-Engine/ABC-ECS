@@ -1,9 +1,9 @@
 use anymap::AnyMap;
 use rustc_hash::FxHashMap;
 use slotmap::{DefaultKey, SecondaryMap, SlotMap};
-use std::{any::TypeId, collections::HashMap};
+use std::any::{Any, TypeId};
 mod macros;
-use macros::*;
+pub use macros::*;
 
 // The Entity will just be an ID that can be
 // indexed into arrays of components for now...
@@ -12,15 +12,20 @@ pub struct Entity {
     pub entity_id: DefaultKey,
 }
 
+pub trait Resource: 'static {
+    fn update(&mut self) {}
+    fn as_any(&self) -> &dyn Any;
+}
+
 pub struct EntitiesAndComponents {
-    // Maybe there should be an object that takes a component
-    // and has a list of which entities have that component?
-    // This would make it easier to iterate over all entities with a certain component,
-    // without having to iterate over all entities
     entities: SlotMap<DefaultKey, Entity>,
     pub(crate) components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
     entities_with_components: FxHashMap<TypeId, SecondaryMap<DefaultKey, Entity>>,
     type_ids_on_entity: SecondaryMap<DefaultKey, Vec<TypeId>>,
+    /// resources holds all the resources that are not components and do not have any relation to entities
+    /// they are read only and can be accessed by any system
+    /// Resources have their own trait, Resource, which has an update method that is called every frame
+    pub(crate) resources: FxHashMap<TypeId, Box<dyn Resource>>,
 }
 
 impl EntitiesAndComponents {
@@ -31,6 +36,7 @@ impl EntitiesAndComponents {
             components: SlotMap::with_capacity(100),
             entities_with_components: FxHashMap::with_capacity_and_hasher(3, Default::default()),
             type_ids_on_entity: SecondaryMap::new(),
+            resources: FxHashMap::default(),
         }
     }
 
@@ -106,7 +112,7 @@ impl EntitiesAndComponents {
 
     /// Gets a reference to a component on an entity
     /// If the component does not exist on the entity, it will return None
-    pub fn try_get_component<T: 'static>(&self, entity: Entity) -> Option<&Box<T>> {
+    pub fn try_get_component<T: Component>(&self, entity: Entity) -> Option<&Box<T>> {
         self.components
             .get(entity.entity_id)
             .unwrap_or_else(|| {
@@ -117,7 +123,7 @@ impl EntitiesAndComponents {
 
     /// Gets a mutable reference to a component on an entity
     /// If the component does not exist on the entity, it will return None
-    pub fn try_get_component_mut<T: 'static>(&mut self, entity: Entity) -> Option<&mut Box<T>> {
+    pub fn try_get_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut Box<T>> {
         self.components
             .get_mut(entity.entity_id)
             .unwrap_or_else(|| {
@@ -126,7 +132,7 @@ impl EntitiesAndComponents {
             .get_mut::<Box<T>>()
     }
 
-    /// Gets a reference to a component on an entity
+    /// Gets a tuple of references to components on an entity
     /// If the component does not exist on the entity, it will panic
     pub fn get_components<'a, T: ComponentsRef<'a> + 'static>(
         &'a self,
@@ -236,6 +242,28 @@ impl EntitiesAndComponents {
             None => None,
         }
     }
+
+    pub fn get_resource<T: Resource>(&self) -> Option<&T> {
+        match self.resources.get(&TypeId::of::<T>()) {
+            Some(resource) => {
+                let resource = (&**resource)
+                    .as_any()
+                    .downcast_ref::<T>()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Resource of type {type:?} does not exist, was the type edited?",
+                            type = std::any::type_name::<T>()
+                        );
+                    });
+                Some(resource)
+            }
+            None => None,
+        }
+    }
+
+    pub fn add_resource<T: Resource>(&mut self, resource: T) {
+        self.resources.insert(TypeId::of::<T>(), Box::new(resource));
+    }
 }
 
 pub struct GameEngine {
@@ -256,6 +284,10 @@ impl GameEngine {
     }
 
     pub fn run(&mut self) {
+        for resource in self.entities_and_components.resources.values_mut() {
+            resource.update();
+        }
+
         for system in &mut self.systems {
             // not sure what to do about the mutability here...
             // maybe seperate the systems and the entities and components?
