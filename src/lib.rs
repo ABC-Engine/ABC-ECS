@@ -1,3 +1,4 @@
+#[doc = include_str!("../README.md")]
 use anymap::AnyMap;
 use rustc_hash::FxHashMap;
 use slotmap::{DefaultKey, SecondaryMap, SlotMap};
@@ -214,10 +215,11 @@ impl EntitiesAndComponents {
     /// returns an iterator over all entities with a certain component
     pub fn get_entities_with_component<T: Component>(
         &self,
-    ) -> Option<slotmap::secondary::Values<'_, DefaultKey, Entity>> {
+    ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
+    {
         match self.entities_with_components.get(&TypeId::of::<T>()) {
-            Some(entities) => Some(entities.values()),
-            None => None,
+            Some(entities) => Some(entities.values()).into_iter().flatten(),
+            None => None.into_iter().flatten(), // this is a hack so that it returns an empty iterator
         }
     }
 
@@ -513,4 +515,23 @@ mod tests {
 
         println!("Position: {}, {}", position.x, position.y);
     }*/
+
+    #[test]
+    fn test_get_entities_with_component() {
+        let mut engine = GameEngine::new();
+        let entities_and_components = &mut engine.entities_and_components;
+
+        let entity = entities_and_components.add_entity();
+        let entity_2 = entities_and_components.add_entity();
+
+        entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
+        entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+
+        entities_and_components.add_component_to(entity_2, Position { x: 0.0, y: 0.0 });
+        entities_and_components.add_component_to(entity_2, Velocity { x: 1.0, y: 1.0 });
+
+        let entities = entities_and_components.get_entities_with_component::<Position>();
+
+        assert_eq!(entities.count(), 2);
+    }
 }

@@ -23,8 +23,6 @@ impl System for PositionSystem {
         let iter: Vec<Entity> = entities_and_components
             // not sure how to do this without collect, which drastically increases the time
             .get_entities_with_component::<Position>()
-            .into_iter()
-            .flatten()
             .cloned()
             .collect();
 

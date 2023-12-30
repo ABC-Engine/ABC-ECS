@@ -5,44 +5,67 @@ This Rust project provides a basic framework for managing game entities, compone
 Create a Game Engine:
 
 ```rust
-let mut engine = GameEngine::new();
-```
-
-Add an Entity and Components:
-
-```rust
-let entities_and_components = &mut engine.entities_and_components;
-let entity = entities_and_components.add_entity();
-```
-
-Add components like Position and Velocity
-
-```rust
-entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
-entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
-```
-Define a System:
-
-```rust
-struct MovementSystem {}
-
-impl System for MovementSystem {
-    fn run(&self, engine: &mut EntitiesAndComponents) {
-        // Logic to update positions based on velocities
+    use ABC_ECS::*;
+    
+    struct Position {
+        x: f32,
+        y: f32,
     }
-}
-```
 
-Run the Engine:
+    struct Velocity {
+        x: f32,
+        y: f32,
+    }
 
-```rust
-// Add your system to the engine
-engine.add_system(Box::new(MovementSystem {}));
+    fn main(){
+        let mut engine = GameEngine::new();
 
-// Run the engine in a loop
-loop {
-    engine.run();
-}
+        //Add an Entity and Components:
+
+        let entities_and_components = &mut engine.entities_and_components;
+        let entity = entities_and_components.add_entity();
+
+        //Add components like Position and Velocity
+
+        entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
+        entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+
+        // or you can do it in one step:
+
+        let entity = entities_and_components
+            .add_entity_with((Position { x: 0.0, y: 0.0 }, Velocity { x: 1.0, y: 1.0 }));
+
+        //Define a System:
+
+        struct MovementSystem {}
+
+        impl System for MovementSystem {
+            // Logic to update positions based on velocities
+            // run wwhenever the engine is run
+            fn run(&mut self, engine: &mut EntitiesAndComponents) {
+                // has to be cloned for borrowing reasons
+                for entity in engine
+                    .get_entities_with_component::<(Position,)>()
+                    .cloned()
+                    .collect::<Vec<Entity>>()
+                {
+                    let (position, velocity) =
+                        engine.get_components_mut::<(Position, Velocity)>(entity);
+                    position.x += velocity.x;
+                    position.y += velocity.y;
+                }
+            }
+        }
+
+        // Add your system to the engine
+        engine.add_system(Box::new(MovementSystem {}));
+
+        // Run the engine in a loop
+        // would want to run this in a loop in a real game
+        for _ in 0..5 {
+            engine.run();
+        }
+    }
 ```
 
 ## Components and Systems
