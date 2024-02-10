@@ -466,56 +466,6 @@ mod tests {
         assert_eq!(velocity, None);
     }
 
-    // this test should not compile
-    /*#[test]
-    fn test_compile_fail_multiple_muts() {
-        let mut engine = GameEngine::new();
-        let entities_and_components = &mut engine.entities_and_components;
-
-        let entity = entities_and_components.add_entity();
-
-        entities_and_components.add_component_to(entity, Position { x: 1.0, y: 0.0 });
-        entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
-
-        let (position, velocity) =
-            get_components_mut!(engine.entities_and_components, entity, Position, Velocity);
-
-        let (position_2, velocity_2) =
-            get_components_mut!(engine.entities_and_components, entity, Position, Velocity);
-
-        position.x += position_2.x;
-        position.y += position_2.y;
-
-        println!("Position: {}, {}", position.x, position_2.y);
-    }*/
-
-    // this test should not compile
-    /*#[test]
-    fn test_lifetimes() {
-        let (position, velocity): (&mut Position, &mut Velocity);
-        {
-            let mut engine = GameEngine::new();
-            let entities_and_components = &mut engine.entities_and_components;
-
-            let entity = entities_and_components.add_entity();
-
-            entities_and_components.add_component_to(entity, Position { x: 1.0, y: 0.0 });
-            entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
-
-            let (position, velocity) =
-                <(Position, Velocity)>::get_components(entities_and_components, entity);
-
-            //(position, velocity) =
-            //    get_components_mut!(engine.entities_and_components, entity, Position, Velocity);
-        }
-
-        // should not be possible, but the lifetimes aren't linked
-        position.x += velocity.x;
-        position.y += velocity.y;
-
-        println!("Position: {}, {}", position.x, position.y);
-    }*/
-
     #[test]
     fn test_get_entities_with_component() {
         let mut engine = GameEngine::new();
