@@ -1,10 +1,13 @@
 #[doc = include_str!("../README.md")]
-use anymap::AnyMap;
+use anymap::Map;
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use rustc_hash::FxHashMap;
 use slotmap::{DefaultKey, SecondaryMap, SlotMap};
 use std::any::{Any, TypeId};
 mod macros;
 pub use macros::*;
+use rayon::prelude::ParallelSliceMut;
+use std::thread::available_parallelism;
 
 // The Entity will just be an ID that can be
 // indexed into arrays of components for now...
@@ -13,14 +16,14 @@ pub struct Entity {
     pub entity_id: DefaultKey,
 }
 
-pub trait Resource: 'static {
+pub trait Resource: 'static + Send + Sync {
     fn update(&mut self) {}
     fn as_any(&self) -> &dyn Any;
 }
 
 pub struct EntitiesAndComponents {
     entities: SlotMap<DefaultKey, Entity>,
-    pub(crate) components: SlotMap<DefaultKey, AnyMap>, // where components[entity_id][component_id]
+    pub(crate) components: SlotMap<DefaultKey, Map<dyn Any + Send + Sync + 'static>>, // where components[entity_id][component_id]
     entities_with_components: FxHashMap<TypeId, SecondaryMap<DefaultKey, Entity>>,
     type_ids_on_entity: SecondaryMap<DefaultKey, Vec<TypeId>>,
     /// resources holds all the resources that are not components and do not have any relation to entities
@@ -44,7 +47,7 @@ impl EntitiesAndComponents {
     /// Adds an entity to the game engine
     /// Returns the entity
     pub fn add_entity(&mut self) -> Entity {
-        let entity_id = self.components.insert(AnyMap::new());
+        let entity_id = self.components.insert(Map::new());
         self.entities.insert(Entity { entity_id });
         self.type_ids_on_entity.insert(entity_id, vec![]);
 
@@ -95,7 +98,10 @@ impl EntitiesAndComponents {
     /// Gets a reference to all the components on an entity
     /// Returns an AnyMap, which can be used to get a reference to a component
     /// This should rarely if ever be used
-    pub fn get_all_components(&self, entity: Entity) -> &AnyMap {
+    pub fn get_all_components(
+        &self,
+        entity: Entity,
+    ) -> &anymap::Map<(dyn Any + Send + Sync + 'static)> {
         self.components.get(entity.entity_id).unwrap_or_else(|| {
             panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
         })
@@ -103,7 +109,10 @@ impl EntitiesAndComponents {
 
     /// Gets a mutable reference to the components on an entity
     /// If the entity does not exist, it will panic
-    pub fn get_all_components_mut(&mut self, entity: Entity) -> &mut AnyMap {
+    pub fn get_all_components_mut(
+        &mut self,
+        entity: Entity,
+    ) -> &mut anymap::Map<(dyn Any + Send + Sync + 'static)> {
         self.components
             .get_mut(entity.entity_id)
             .unwrap_or_else(|| {
@@ -113,7 +122,7 @@ impl EntitiesAndComponents {
 
     /// Gets a reference to a component on an entity
     /// If the component does not exist on the entity, it will return None
-    pub fn try_get_component<T: Component>(&self, entity: Entity) -> Option<&Box<T>> {
+    pub fn try_get_component<T: Component + Send + Sync>(&self, entity: Entity) -> Option<&Box<T>> {
         self.components
             .get(entity.entity_id)
             .unwrap_or_else(|| {
@@ -124,7 +133,10 @@ impl EntitiesAndComponents {
 
     /// Gets a mutable reference to a component on an entity
     /// If the component does not exist on the entity, it will return None
-    pub fn try_get_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut Box<T>> {
+    pub fn try_get_component_mut<T: Component + Send + Sync>(
+        &mut self,
+        entity: Entity,
+    ) -> Option<&mut Box<T>> {
         self.components
             .get_mut(entity.entity_id)
             .unwrap_or_else(|| {
@@ -167,7 +179,7 @@ impl EntitiesAndComponents {
 
     /// Adds a component to an entity
     /// If the component already exists on the entity, it will be overwritten
-    pub fn add_component_to<T: Component>(&mut self, entity: Entity, component: T) {
+    pub fn add_component_to<T: Component + Send + Sync>(&mut self, entity: Entity, component: T) {
         // add the component to the entity
         let components = self
             .components
@@ -191,7 +203,7 @@ impl EntitiesAndComponents {
         self.type_ids_on_entity[entity.entity_id].push(TypeId::of::<T>());
     }
 
-    pub fn remove_component_from<T: Component>(&mut self, entity: Entity) {
+    pub fn remove_component_from<T: Component + Send + Sync>(&mut self, entity: Entity) {
         // remove the component from the entity
         let components = self
             .components
@@ -268,9 +280,103 @@ impl EntitiesAndComponents {
     }
 }
 
+pub struct SingleMutEntity<'a> {
+    entity: Entity,
+    entities_and_components: &'a mut EntitiesAndComponents,
+}
+
+// for safety reasons, we need to make sure we only access data pertaining to this entity
+impl<'a> SingleMutEntity<'a> {
+    pub fn get_component<T: Component + Send + Sync>(&self) -> &T {
+        self.entities_and_components
+            .try_get_component::<T>(self.entity)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Component of type {type:?} does not exist on entity {entity:?}",
+                    type = std::any::type_name::<T>(),
+                    entity = self.entity
+                );
+            })
+    }
+
+    pub fn try_get_component<T: Component + Send + Sync>(&self) -> Option<&Box<T>> {
+        self.entities_and_components
+            .try_get_component::<T>(self.entity)
+    }
+
+    pub fn get_component_mut<T: Component + Send + Sync>(&mut self) -> &mut T {
+        self.entities_and_components
+            .try_get_component_mut::<T>(self.entity)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Component of type {type:?} does not exist on entity {entity:?}",
+                    type = std::any::type_name::<T>(),
+                    entity = self.entity
+                );
+            })
+    }
+
+    pub fn try_get_component_mut<T: Component + Send + Sync>(&mut self) -> Option<&mut Box<T>> {
+        self.entities_and_components
+            .try_get_component_mut::<T>(self.entity)
+    }
+
+    pub fn get_components<'b, T: ComponentsRef<'b> + 'static>(&'b self) -> T::Result {
+        <T>::get_components(self.entities_and_components, self.entity)
+    }
+
+    pub fn try_get_components<'b, T: TryComponentsRef<'b> + 'static>(&'b self) -> T::Result {
+        <T>::try_get_components(self.entities_and_components, self.entity)
+    }
+
+    pub fn get_components_mut<'b, T: ComponentsMut<'b> + 'static>(&'b mut self) -> T::Result {
+        <T>::get_components_mut(self.entities_and_components, self.entity)
+    }
+
+    pub fn try_get_components_mut<'b, T: TryComponentsMut<'b> + 'static>(
+        &'b mut self,
+    ) -> T::Result {
+        <T>::try_get_components_mut(self.entities_and_components, self.entity)
+    }
+
+    pub fn remove_component<T: Component + Send + Sync>(&mut self) {
+        self.entities_and_components
+            .remove_component_from::<T>(self.entity);
+    }
+
+    pub fn add_component<T: Component + Send + Sync>(&mut self, component: T) {
+        self.entities_and_components
+            .add_component_to(self.entity, component);
+    }
+
+    pub fn has_component<T: Component + Send + Sync>(&self) -> bool {
+        self.entities_and_components
+            .try_get_component::<T>(self.entity)
+            .is_some()
+    }
+
+    pub fn remove_entity(&mut self) {
+        self.entities_and_components.remove_entity(self.entity);
+    }
+}
+
+struct EntitiesAndComponentPtr {
+    entities_and_components: *mut EntitiesAndComponents,
+}
+
+impl EntitiesAndComponentPtr {
+    pub fn as_mut(&self) -> &mut EntitiesAndComponents {
+        unsafe { &mut *self.entities_and_components }
+    }
+}
+
+// impl send and sync for EntitiesAndComponentPtr
+unsafe impl Send for EntitiesAndComponentPtr {}
+unsafe impl Sync for EntitiesAndComponentPtr {}
+
 pub struct GameEngine {
     pub entities_and_components: EntitiesAndComponents,
-    systems: Vec<Box<dyn System>>,
+    systems: Vec<Box<dyn System + Sync + Send>>,
 }
 
 impl GameEngine {
@@ -281,18 +387,68 @@ impl GameEngine {
         }
     }
 
-    pub fn add_system(&mut self, system: Box<dyn System>) {
-        self.systems.push(system);
+    pub fn add_system<T: System + Send + Sync + 'static>(&mut self, system: T) {
+        self.systems.push(Box::new(system));
     }
 
     pub fn run(&mut self) {
         for resource in self.entities_and_components.resources.values_mut() {
             resource.update();
         }
+        // run the prestep function for each systems in parallel
+        {
+            // check which systems implement the prestep function and collect mutable references to them
+            let mut systems_with_prestep = self
+                .systems
+                .iter_mut()
+                .filter(|system| system.implements_prestep())
+                .collect::<Vec<&mut Box<dyn System + Sync + Send>>>();
+
+            systems_with_prestep
+                .par_iter_mut()
+                .for_each(|system| system.prestep(&self.entities_and_components));
+        }
+
+        {
+            // check which systems implement the single_entity_step function and collect mutable references to them
+            let systems_with_single_entity_step = self
+                .systems
+                .iter()
+                .filter(|system| system.implements_single_entity_step())
+                .collect::<Vec<&Box<dyn System + Sync + Send>>>();
+
+            if !systems_with_single_entity_step.is_empty() {
+                let entities_and_components_ptr = &mut self.entities_and_components as *mut _;
+                let entities_and_components_ptr = EntitiesAndComponentPtr {
+                    entities_and_components: entities_and_components_ptr,
+                };
+
+                // check how many threads are available
+                let num_threads_approx = available_parallelism().unwrap().get();
+
+                // run the single_entity_step function for each entity in parallel
+                self.entities_and_components
+                    .get_entities()
+                    .par_chunks_exact_mut(
+                        ((self.entities_and_components.get_entity_count() * 25)
+                            / num_threads_approx)
+                            .max(100),
+                    )
+                    .for_each(|entity_chunk| {
+                        for entity in entity_chunk {
+                            for system in systems_with_single_entity_step.as_slice() {
+                                let mut single_entity = SingleMutEntity {
+                                    entity: *entity,
+                                    entities_and_components: entities_and_components_ptr.as_mut(),
+                                };
+                                system.single_entity_step(&mut single_entity);
+                            }
+                        }
+                    });
+            }
+        }
 
         for system in &mut self.systems {
-            // not sure what to do about the mutability here...
-            // maybe seperate the systems and the entities and components?
             system.run(&mut self.entities_and_components);
         }
     }
@@ -303,8 +459,24 @@ pub trait Component: 'static {}
 impl<T: 'static> Component for T {}
 
 /// Systems access and change components on objects
+/// Be careful to implement get_allow_entity_based_multithreading as true if you want to use the single_entity_step function
+/// If you don't it will still work but, it will be slower (in most cases)
 pub trait System {
-    fn run(&mut self, engine: &mut EntitiesAndComponents);
+    /// This function can collect data that will be used in the single_entity_step function
+    /// This allows both functions to be called in parallel, without a data race
+    /// If you implement this function, make sure to implement implements_prestep as true
+    fn prestep(&mut self, engine: &EntitiesAndComponents) {}
+    /// Should just return true or false based on whether or not the system implements the prestep function
+    fn implements_prestep(&self) -> bool {
+        false
+    }
+    /// If you implement this function, it will be called for each entity in parallel, but make sure to implement get_allow_single_entity_step as true
+    fn single_entity_step(&self, single_entity: &mut SingleMutEntity) {}
+    /// Should just return true or false based on whether or not the system implements the single_entity_step function
+    fn implements_single_entity_step(&self) -> bool {
+        false
+    }
+    fn run(&mut self, engine: &mut EntitiesAndComponents) {}
 }
 
 #[cfg(test)]
@@ -358,7 +530,7 @@ mod tests {
         entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
         entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
 
-        engine.add_system(Box::new(MovementSystem {}));
+        engine.add_system(MovementSystem {});
 
         for _ in 0..5 {
             engine.run();

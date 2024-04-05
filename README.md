@@ -22,12 +22,12 @@ Create a Game Engine:
     fn main(){
         let mut engine = GameEngine::new();
 
-        //Add an Entity and Components:
+        // Add an Entity and Components:
 
         let entities_and_components = &mut engine.entities_and_components;
         let entity = entities_and_components.add_entity();
 
-        //Add components like Position and Velocity
+        // Add components like Position and Velocity
 
         entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
         entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
@@ -37,7 +37,7 @@ Create a Game Engine:
         let entity = entities_and_components
             .add_entity_with((Position { x: 0.0, y: 0.0 }, Velocity { x: 1.0, y: 1.0 }));
 
-        //Define a System:
+        // Define a System:
 
         struct MovementSystem {}
 

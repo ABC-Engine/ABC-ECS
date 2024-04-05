@@ -19,15 +19,26 @@ struct Health {
 struct PositionSystem;
 
 impl System for PositionSystem {
-    fn run(&mut self, entities_and_components: &mut EntitiesAndComponents) {
-        let iter: Vec<Entity> = entities_and_components
-            // not sure how to do this without collect, which drastically increases the time
-            .get_entities_with_component::<Position>()
-            .cloned()
-            .collect();
+    fn single_entity_step(&self, single_entity: &mut SingleMutEntity) {
+        if let Some(position) = single_entity.try_get_component_mut::<Position>() {
+            position.x += 1.0;
+            position.y += 1.0;
+        }
+    }
+    fn implements_single_entity_step(&self) -> bool {
+        true
+    }
+}
 
-        for entity in iter {
-            let entity: Entity = entity;
+struct SingleThreadedPositionSystem;
+
+impl System for SingleThreadedPositionSystem {
+    fn run(&mut self, entities_and_components: &mut EntitiesAndComponents) {
+        for i in 0..entities_and_components.get_entity_count_with_component::<Position>() {
+            let entity = entities_and_components
+                .get_entity_with_component::<Position>(i)
+                .expect("Failed to get entity with component Position. This should never happen.");
+
             let (position,) = entities_and_components.get_components_mut::<(Position,)>(entity);
 
             position.x += 1.0;
@@ -43,6 +54,18 @@ impl System for RemoveEntitiesSystem {
         while let Some(entity) = entities_and_components.get_nth_entity(0) {
             entities_and_components.remove_entity(entity);
         }
+    }
+}
+
+struct RemoveEntitiesParallelSystem;
+
+impl System for RemoveEntitiesParallelSystem {
+    fn single_entity_step(&self, single_entity: &mut SingleMutEntity) {
+        single_entity.remove_entity();
+    }
+
+    fn implements_single_entity_step(&self) -> bool {
+        true
     }
 }
 
@@ -62,8 +85,10 @@ fn main() {
         let overall_start_time = Instant::now();
         for _ in 0..1000 {
             let mut world = GameEngine::new();
-            //world.add_system(Box::new(PositionSystem {}));
-            world.add_system(Box::new(RemoveEntitiesSystem {}));
+            //world.add_system(PositionSystem {});
+            //world.add_system(SingleThreadedPositionSystem {});
+            //world.add_system(RemoveEntitiesSystem {});
+            //world.add_system(RemoveEntitiesParallelSystem {});
             {
                 let entities_and_components = &mut world.entities_and_components;
 
