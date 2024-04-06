@@ -20,7 +20,7 @@ Create a Game Engine:
     }
 
     fn main(){
-        let mut engine = GameEngine::new();
+        let mut engine = World::new();
 
         // Add an Entity and Components:
 
@@ -60,7 +60,7 @@ Create a Game Engine:
         }
 
         // Add your system to the engine
-        engine.add_system(Box::new(MovementSystem {}));
+        engine.add_system(MovementSystem {});
 
         // Run the engine in a loop
         // would want to run this in a loop in a real game

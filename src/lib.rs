@@ -7,7 +7,6 @@ use std::any::{Any, TypeId};
 mod macros;
 pub use macros::*;
 use rayon::prelude::ParallelSliceMut;
-use std::thread::available_parallelism;
 
 // The Entity will just be an ID that can be
 // indexed into arrays of components for now...
@@ -374,14 +373,14 @@ impl EntitiesAndComponentPtr {
 unsafe impl Send for EntitiesAndComponentPtr {}
 unsafe impl Sync for EntitiesAndComponentPtr {}
 
-pub struct GameEngine {
+pub struct World {
     pub entities_and_components: EntitiesAndComponents,
     systems: Vec<Box<dyn System + Sync + Send>>,
 }
 
-impl GameEngine {
+impl World {
     pub fn new() -> Self {
-        GameEngine {
+        World {
             entities_and_components: EntitiesAndComponents::new(),
             systems: vec![],
         }
@@ -395,6 +394,11 @@ impl GameEngine {
         for resource in self.entities_and_components.resources.values_mut() {
             resource.update();
         }
+
+        if self.systems.is_empty() {
+            return;
+        }
+
         // run the prestep function for each systems in parallel
         {
             // check which systems implement the prestep function and collect mutable references to them
@@ -423,28 +427,26 @@ impl GameEngine {
                     entities_and_components: entities_and_components_ptr,
                 };
 
-                // check how many threads are available
-                let num_threads_approx = available_parallelism().unwrap().get();
+                /*let chunk_size = ((self.entities_and_components.get_entity_count())
+                / (self.num_cpus * 2))
+                .max(20);*/
+                let chunk_size = 5;
 
                 // run the single_entity_step function for each entity in parallel
-                self.entities_and_components
-                    .get_entities()
-                    .par_chunks_exact_mut(
-                        ((self.entities_and_components.get_entity_count() * 25)
-                            / num_threads_approx)
-                            .max(100),
-                    )
-                    .for_each(|entity_chunk| {
-                        for entity in entity_chunk {
-                            for system in systems_with_single_entity_step.as_slice() {
-                                let mut single_entity = SingleMutEntity {
-                                    entity: *entity,
-                                    entities_and_components: entities_and_components_ptr.as_mut(),
-                                };
-                                system.single_entity_step(&mut single_entity);
-                            }
+                let entities = &mut self.entities_and_components.get_entities();
+                let par_chunks = entities.par_chunks_mut(chunk_size);
+                par_chunks.for_each(|entity_chunk| {
+                    for entity in entity_chunk {
+                        for system in systems_with_single_entity_step.as_slice() {
+                            let mut single_entity = SingleMutEntity {
+                                entity: *entity,
+                                entities_and_components: entities_and_components_ptr.as_mut(),
+                            };
+
+                            system.single_entity_step(&mut single_entity);
                         }
-                    });
+                    }
+                });
             }
         }
 
@@ -483,7 +485,7 @@ pub trait System {
 mod tests {
     use super::*;
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     struct Position {
         x: f32,
         y: f32,
@@ -520,9 +522,25 @@ mod tests {
         }
     }
 
+    struct ParallelMovementSystem {}
+
+    impl System for ParallelMovementSystem {
+        fn single_entity_step(&self, single_entity: &mut SingleMutEntity) {
+            let (position, velocity) = single_entity.get_components_mut::<(Position, Velocity)>();
+
+            position.x += velocity.x;
+            position.y += velocity.y;
+
+            println!("Position: {}, {}", position.x, position.y);
+        }
+        fn implements_single_entity_step(&self) -> bool {
+            true
+        }
+    }
+
     #[test]
     fn test_components_mut() {
-        let mut engine = GameEngine::new();
+        let mut engine = World::new();
         let entities_and_components = &mut engine.entities_and_components;
 
         let entity = entities_and_components.add_entity();
@@ -539,7 +557,7 @@ mod tests {
 
     #[test]
     fn test_try_get_components() {
-        let mut engine = GameEngine::new();
+        let mut engine = World::new();
         let entities_and_components = &mut engine.entities_and_components;
 
         let entity = entities_and_components.add_entity();
@@ -558,7 +576,7 @@ mod tests {
 
     #[test]
     fn test_overriding_components() {
-        let mut engine = GameEngine::new();
+        let mut engine = World::new();
         let entities_and_components = &mut engine.entities_and_components;
 
         let entity = entities_and_components.add_entity();
@@ -573,7 +591,7 @@ mod tests {
 
     #[test]
     fn test_multiple_entities() {
-        let mut engine = GameEngine::new();
+        let mut engine = World::new();
         let entities_and_components = &mut engine.entities_and_components;
 
         let entity = entities_and_components.add_entity();
@@ -593,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_add_entity_with_components() {
-        let mut engine = GameEngine::new();
+        let mut engine = World::new();
         let entities_and_components = &mut engine.entities_and_components;
 
         let entity = entities_and_components
@@ -610,7 +628,7 @@ mod tests {
 
     #[test]
     fn test_entity_removal() {
-        let mut engine = GameEngine::new();
+        let mut engine = World::new();
         let entities_and_components = &mut engine.entities_and_components;
 
         let entity = entities_and_components
@@ -640,7 +658,7 @@ mod tests {
 
     #[test]
     fn test_get_entities_with_component() {
-        let mut engine = GameEngine::new();
+        let mut engine = World::new();
         let entities_and_components = &mut engine.entities_and_components;
 
         let entity = entities_and_components.add_entity();
@@ -655,5 +673,185 @@ mod tests {
         let entities = entities_and_components.get_entities_with_component::<Position>();
 
         assert_eq!(entities.count(), 2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_generation_values() {
+        let mut engine = World::new();
+        let entities_and_components = &mut engine.entities_and_components;
+
+        let entity_1 = entities_and_components.add_entity();
+        let entity_2 = entities_and_components.add_entity();
+
+        entities_and_components.add_component_to(entity_1, Position { x: 0.0, y: 0.0 });
+        entities_and_components.add_component_to(entity_1, Velocity { x: 1.0, y: 1.0 });
+
+        entities_and_components.add_component_to(entity_2, Position { x: 0.0, y: 0.0 });
+        entities_and_components.add_component_to(entity_2, Velocity { x: 1.0, y: 1.0 });
+
+        // remove the first entity
+        entities_and_components.remove_entity(entity_1);
+
+        // add a new entity
+        let entity_3 = entities_and_components.add_entity();
+
+        // make sure the new entity doesn't have the old entity's components
+        let (position, velocity) =
+            entities_and_components.try_get_components::<(Position, Velocity)>(entity_3);
+
+        assert_eq!(position, None);
+        assert_eq!(velocity, None);
+
+        let (position, velocity) =
+            entities_and_components.try_get_components::<(Position, Velocity)>(entity_1);
+    }
+
+    #[test]
+    fn test_resources() {
+        struct TestResource {
+            value: i32,
+        }
+
+        impl Resource for TestResource {
+            fn update(&mut self) {
+                self.value += 1;
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+
+        let mut engine = World::new();
+        {
+            let entities_and_components = &mut engine.entities_and_components;
+
+            let resource = TestResource { value: 0 };
+
+            entities_and_components.add_resource(resource);
+
+            let resource = entities_and_components
+                .get_resource::<TestResource>()
+                .unwrap();
+
+            assert_eq!(resource.value, 0);
+        }
+
+        for _ in 0..5 {
+            engine.run();
+        }
+
+        {
+            let entities_and_components = &mut engine.entities_and_components;
+
+            let resource = entities_and_components
+                .get_resource::<TestResource>()
+                .unwrap();
+
+            assert_eq!(resource.value, 5);
+        }
+    }
+
+    #[test]
+    fn test_parallel_systems() {
+        let mut engine = World::new();
+        let entity;
+        {
+            let entities_and_components = &mut engine.entities_and_components;
+
+            entity = entities_and_components.add_entity();
+            let entity_2 = entities_and_components.add_entity();
+
+            entities_and_components.add_component_to(entity, Position { x: 0.0, y: 0.0 });
+            entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+
+            entities_and_components.add_component_to(entity_2, Position { x: 0.0, y: 0.0 });
+            entities_and_components.add_component_to(entity_2, Velocity { x: 1.0, y: 1.0 });
+
+            engine.add_system(ParallelMovementSystem {});
+        }
+
+        for _ in 0..5 {
+            engine.run();
+        }
+
+        {
+            let entities_and_components = &mut engine.entities_and_components;
+
+            let (position, velocity) =
+                entities_and_components.get_components::<(Position, Velocity)>(entity);
+
+            assert_eq!(position.x, 5.0);
+            assert_eq!(position.y, 5.0);
+            assert_eq!(velocity.x, 1.0);
+            assert_eq!(velocity.y, 1.0);
+        }
+    }
+
+    struct PrestepSystem {
+        postions: Vec<Position>,
+    }
+
+    impl System for PrestepSystem {
+        fn prestep(&mut self, engine: &EntitiesAndComponents) {
+            self.postions.clear();
+
+            for entity in engine.get_entities_with_component::<Position>() {
+                let (position,) = engine.get_components::<(Position,)>(*entity);
+                self.postions.push(position.clone());
+            }
+        }
+
+        fn implements_prestep(&self) -> bool {
+            true
+        }
+
+        fn run(&mut self, engine: &mut EntitiesAndComponents) {
+            for position in &self.postions {
+                engine.add_entity_with((position.clone(),));
+            }
+        }
+    }
+
+    #[test]
+    fn test_prestep() {
+        let mut engine = World::new();
+        {
+            let entities_and_components = &mut engine.entities_and_components;
+
+            let entity = entities_and_components.add_entity();
+            let entity_2 = entities_and_components.add_entity();
+
+            entities_and_components.add_component_to(entity, Position { x: 0.0, y: 1.0 });
+            entities_and_components.add_component_to(entity, Velocity { x: 1.0, y: 1.0 });
+
+            entities_and_components.add_component_to(entity_2, Position { x: 1.0, y: 0.0 });
+            entities_and_components.add_component_to(entity_2, Velocity { x: 1.0, y: 1.0 });
+
+            engine.add_system(PrestepSystem {
+                postions: Vec::new(),
+            });
+        }
+
+        for _ in 0..1 {
+            engine.run();
+        }
+
+        {
+            let entities_and_components = &mut engine.entities_and_components;
+            let first_added_entity = entities_and_components.get_nth_entity(0);
+            let second_added_entity = entities_and_components.get_nth_entity(1);
+
+            let (position,) =
+                entities_and_components.get_components::<(Position,)>(first_added_entity.unwrap());
+            let (position_2,) =
+                entities_and_components.get_components::<(Position,)>(second_added_entity.unwrap());
+
+            assert_eq!(position.x, 0.0);
+            assert_eq!(position.y, 1.0);
+            assert_eq!(position_2.x, 1.0);
+            assert_eq!(position_2.y, 0.0);
+        }
     }
 }
