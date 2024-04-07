@@ -1,10 +1,11 @@
 # Performance
 This ECS was built with usability in mind. That being said it is only a pseudo-ECS. Component-based multi-threading has not yet been implemented. I am not sure it ever will be, but I am interested in an entity chunk-based multithreading approach.
+
 # ABC Game Engine - Simple ECS Framework
 This Rust project provides a basic framework for managing game entities, components, and systems in the ABC Game Engine using an Entity Component System (ECS) approach.
 
-## Quick Example
-Create a Game Engine:
+# Quick Example
+Create a World:
 
 ```rust
 fn main(){
@@ -33,10 +34,8 @@ fn main(){
 }
 ```
 
-## Components and Systems
-The example includes simple components like Position and Velocity, along with a MovementSystem that updates positions based on velocities. Customize these components and systems according to your game's needs.
+# Documentation
+Visit the docs [here](https://github.com/ABC-Engine/ABC-ECS/wiki). 
 
-## Testing
-Explore the included test module to see how entities, components, systems, and the game engine are used together. Use this as a starting point for writing your own tests.
-
-Feel free to tweak and expand the ECS framework to fit your game development requirements within the ABC Game Engine!
+# Contributing
+Contributions are welcome! Start by filing an issue and we can work forward from there! If you're not sure what to work on but you want to help [Join the discord and ping me](https://discord.gg/6nTvhYRfpm), I'm happy to help!
