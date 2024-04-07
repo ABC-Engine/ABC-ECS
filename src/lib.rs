@@ -510,9 +510,8 @@ mod tests {
 
                 // be very careful when using this macro like this
                 // using it this way could cause a data race if you are not careful
-                //let (velocity,) = get_components!(engine, entity, Velocity);
                 let (position, velocity) =
-                    <(Position, Velocity)>::get_components_mut(engine, entity);
+                    engine.get_components_mut::<(Position, Velocity)>(entity);
 
                 position.x += velocity.x;
                 position.y += velocity.y;
@@ -703,6 +702,7 @@ mod tests {
         assert_eq!(position, None);
         assert_eq!(velocity, None);
 
+        // this line should panic, there is no entity with the id of entity_1 because the generation value should be different
         let (position, velocity) =
             entities_and_components.try_get_components::<(Position, Velocity)>(entity_1);
     }
