@@ -1,5 +1,5 @@
 # Performance
-This ECS was built with usability in mind. That being said it is only a pseudo-ECS. Component-based multi-threading has not yet been implemented. I am not sure it ever will be, but I am interested in an entity chunk-based multithreading approach.
+This ECS was built with usability in mind. That being said it is only a pseudo-ECS. As needed you can use either the run or single_entity_step and pre-step to utilize the multithreading we offer. As needed you can switch between these two methods. This ECS can be really performant if you need it to be.
 
 # ABC Game Engine - Simple ECS Framework
 This Rust project provides a basic framework for managing game entities, components, and systems in the ABC Game Engine using an Entity Component System (ECS) approach.
