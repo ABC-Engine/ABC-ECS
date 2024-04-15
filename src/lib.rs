@@ -12,17 +12,17 @@ use rayon::prelude::ParallelSliceMut;
 // indexed into arrays of components for now...
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Entity {
-    pub entity_id: DefaultKey,
+    pub(crate) entity_id: DefaultKey,
 }
 
-pub trait Resource: 'static + Send + Sync {
+pub trait Resource: 'static {
     fn update(&mut self) {}
     fn as_any(&self) -> &dyn Any;
 }
 
 pub struct EntitiesAndComponents {
     entities: SlotMap<DefaultKey, Entity>,
-    pub(crate) components: SlotMap<DefaultKey, Map<dyn Any + Send + Sync + 'static>>, // where components[entity_id][component_id]
+    pub(crate) components: SlotMap<DefaultKey, Map<dyn Any + 'static>>, // where components[entity_id][component_id]
     entities_with_components: FxHashMap<TypeId, SecondaryMap<DefaultKey, Entity>>,
     type_ids_on_entity: SecondaryMap<DefaultKey, Vec<TypeId>>,
     /// resources holds all the resources that are not components and do not have any relation to entities
@@ -97,10 +97,7 @@ impl EntitiesAndComponents {
     /// Gets a reference to all the components on an entity
     /// Returns an AnyMap, which can be used to get a reference to a component
     /// This should rarely if ever be used
-    pub fn get_all_components(
-        &self,
-        entity: Entity,
-    ) -> &anymap::Map<(dyn Any + Send + Sync + 'static)> {
+    pub fn get_all_components(&self, entity: Entity) -> &anymap::Map<(dyn Any + 'static)> {
         self.components.get(entity.entity_id).unwrap_or_else(|| {
             panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
         })
@@ -111,7 +108,7 @@ impl EntitiesAndComponents {
     pub fn get_all_components_mut(
         &mut self,
         entity: Entity,
-    ) -> &mut anymap::Map<(dyn Any + Send + Sync + 'static)> {
+    ) -> &mut anymap::Map<(dyn Any + 'static)> {
         self.components
             .get_mut(entity.entity_id)
             .unwrap_or_else(|| {
@@ -121,7 +118,7 @@ impl EntitiesAndComponents {
 
     /// Gets a reference to a component on an entity
     /// If the component does not exist on the entity, it will return None
-    pub fn try_get_component<T: Component + Send + Sync>(&self, entity: Entity) -> Option<&Box<T>> {
+    pub fn try_get_component<T: Component>(&self, entity: Entity) -> Option<&Box<T>> {
         self.components
             .get(entity.entity_id)
             .unwrap_or_else(|| {
@@ -132,10 +129,7 @@ impl EntitiesAndComponents {
 
     /// Gets a mutable reference to a component on an entity
     /// If the component does not exist on the entity, it will return None
-    pub fn try_get_component_mut<T: Component + Send + Sync>(
-        &mut self,
-        entity: Entity,
-    ) -> Option<&mut Box<T>> {
+    pub fn try_get_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut Box<T>> {
         self.components
             .get_mut(entity.entity_id)
             .unwrap_or_else(|| {
@@ -178,7 +172,7 @@ impl EntitiesAndComponents {
 
     /// Adds a component to an entity
     /// If the component already exists on the entity, it will be overwritten
-    pub fn add_component_to<T: Component + Send + Sync>(&mut self, entity: Entity, component: T) {
+    pub fn add_component_to<T: Component>(&mut self, entity: Entity, component: T) {
         // add the component to the entity
         let components = self
             .components
@@ -202,7 +196,7 @@ impl EntitiesAndComponents {
         self.type_ids_on_entity[entity.entity_id].push(TypeId::of::<T>());
     }
 
-    pub fn remove_component_from<T: Component + Send + Sync>(&mut self, entity: Entity) {
+    pub fn remove_component_from<T: Component>(&mut self, entity: Entity) {
         // remove the component from the entity
         let components = self
             .components
@@ -279,6 +273,145 @@ impl EntitiesAndComponents {
     }
 }
 
+pub struct EntitiesAndComponentsThreadSafe<'a> {
+    entities_and_components: &'a mut EntitiesAndComponents,
+}
+
+impl<'b> EntitiesAndComponentsThreadSafe<'b> {
+    fn new(entities_and_components: &'b mut EntitiesAndComponents) -> Self {
+        EntitiesAndComponentsThreadSafe {
+            entities_and_components: entities_and_components,
+        }
+    }
+
+    /// Adds an entity to the game engine
+    /// Returns the entity
+    pub fn add_entity(&mut self) -> Entity {
+        self.entities_and_components.add_entity()
+    }
+
+    pub fn add_entity_with<T: OwnedComponents<Input = T> + Send + Sync>(
+        &mut self,
+        components: T,
+    ) -> Entity {
+        self.entities_and_components.add_entity_with(components)
+    }
+
+    pub fn remove_entity(&mut self, entity: Entity) {
+        self.entities_and_components.remove_entity(entity)
+    }
+
+    /// Gets a reference to all the entities in the game engine
+    /// Should rarely if ever be used
+    pub fn get_entities(&self) -> Vec<Entity> {
+        self.entities_and_components.get_entities()
+    }
+
+    /// Gets a copy of an entity at a certain index
+    pub fn get_nth_entity(&self, index: usize) -> Option<Entity> {
+        self.entities_and_components.get_nth_entity(index)
+    }
+
+    /// Gets the number of entities in the game engine
+    pub fn get_entity_count(&self) -> usize {
+        self.entities_and_components.get_entity_count()
+    }
+
+    // get all components is impossible to ensure thread safety with
+
+    /// Gets a reference to a component on an entity
+    /// If the component does not exist on the entity, it will return None
+    pub fn try_get_component<T: Component + Send + Sync>(&self, entity: Entity) -> Option<&Box<T>> {
+        self.entities_and_components.try_get_component(entity)
+    }
+
+    /// Gets a mutable reference to a component on an entity
+    /// If the component does not exist on the entity, it will return None
+    pub fn try_get_component_mut<T: Component + Send + Sync>(
+        &mut self,
+        entity: Entity,
+    ) -> Option<&mut Box<T>> {
+        self.entities_and_components.try_get_component_mut(entity)
+    }
+
+    /// Gets a tuple of references to components on an entity
+    /// If the component does not exist on the entity, it will panic
+    pub fn get_components<'a, T: ComponentsRef<'a> + Send + Sync + 'static>(
+        &'a self,
+        entity: Entity,
+    ) -> T::Result {
+        self.entities_and_components.get_components::<T>(entity)
+    }
+
+    /// Gets a mutable reference to a component on an entity
+    /// If the component does not exist on the entity, it will panic
+    pub fn get_components_mut<'a, T: ComponentsMut<'a> + Send + Sync + 'static>(
+        &'a mut self,
+        entity: Entity,
+    ) -> T::Result {
+        self.entities_and_components.get_components_mut::<T>(entity)
+    }
+
+    pub fn try_get_components<'a, T: TryComponentsRef<'a> + Send + Sync + 'static>(
+        &'a self,
+        entity: Entity,
+    ) -> T::Result {
+        self.entities_and_components.try_get_components::<T>(entity)
+    }
+
+    pub fn try_get_components_mut<'a, T: TryComponentsMut<'a> + Send + Sync + 'static>(
+        &'a mut self,
+        entity: Entity,
+    ) -> T::Result {
+        self.entities_and_components
+            .try_get_components_mut::<T>(entity)
+    }
+
+    /// Adds a component to an entity
+    /// If the component already exists on the entity, it will be overwritten
+    pub fn add_component_to<T: Component + Send + Sync>(&mut self, entity: Entity, component: T) {
+        self.entities_and_components
+            .add_component_to(entity, component)
+    }
+
+    pub fn remove_component_from<T: Component + Send + Sync>(&mut self, entity: Entity) {
+        self.entities_and_components
+            .remove_component_from::<T>(entity)
+    }
+
+    /// returns an iterator over all entities with a certain component
+    pub fn get_entities_with_component<T: Component + Send + Sync>(
+        &self,
+    ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
+    {
+        self.entities_and_components
+            .get_entities_with_component::<T>()
+    }
+
+    pub fn get_entity_count_with_component<T: Component + Send + Sync>(&self) -> usize {
+        self.entities_and_components
+            .get_entity_count_with_component::<T>()
+    }
+
+    /// gets the nth entity with a certain component
+    /// O(n) use get_entities_with_component if you need to iterate over all entities with a certain component
+    pub fn get_entity_with_component<T: Component + Send + Sync>(
+        &self,
+        index: usize,
+    ) -> Option<Entity> {
+        self.entities_and_components
+            .get_entity_with_component::<T>(index)
+    }
+
+    pub fn get_resource<T: Resource + Send + Sync>(&self) -> Option<&T> {
+        self.entities_and_components.get_resource::<T>()
+    }
+
+    pub fn add_resource<T: Resource + Send + Sync>(&mut self, resource: T) {
+        self.entities_and_components.add_resource(resource)
+    }
+}
+
 pub struct SingleMutEntity<'a> {
     entity: Entity,
     entities_and_components: &'a mut EntitiesAndComponents,
@@ -320,19 +453,23 @@ impl<'a> SingleMutEntity<'a> {
             .try_get_component_mut::<T>(self.entity)
     }
 
-    pub fn get_components<'b, T: ComponentsRef<'b> + 'static>(&'b self) -> T::Result {
+    pub fn get_components<'b, T: ComponentsRef<'b> + Send + Sync + 'static>(&'b self) -> T::Result {
         <T>::get_components(self.entities_and_components, self.entity)
     }
 
-    pub fn try_get_components<'b, T: TryComponentsRef<'b> + 'static>(&'b self) -> T::Result {
+    pub fn try_get_components<'b, T: TryComponentsRef<'b> + Send + Sync + 'static>(
+        &'b self,
+    ) -> T::Result {
         <T>::try_get_components(self.entities_and_components, self.entity)
     }
 
-    pub fn get_components_mut<'b, T: ComponentsMut<'b> + 'static>(&'b mut self) -> T::Result {
+    pub fn get_components_mut<'b, T: ComponentsMut<'b> + Send + Sync + 'static>(
+        &'b mut self,
+    ) -> T::Result {
         <T>::get_components_mut(self.entities_and_components, self.entity)
     }
 
-    pub fn try_get_components_mut<'b, T: TryComponentsMut<'b> + 'static>(
+    pub fn try_get_components_mut<'b, T: TryComponentsMut<'b> + Send + Sync + 'static>(
         &'b mut self,
     ) -> T::Result {
         <T>::try_get_components_mut(self.entities_and_components, self.entity)
@@ -364,14 +501,24 @@ struct EntitiesAndComponentPtr {
 }
 
 impl EntitiesAndComponentPtr {
+    // I know this is horrid but, it's kind of needed for the parallel stuff
+    // it's only used once
     pub fn as_mut(&self) -> &mut EntitiesAndComponents {
         unsafe { &mut *self.entities_and_components }
     }
 }
 
-// impl send and sync for EntitiesAndComponentPtr
+// this is not really safe it's safe by not making it public and being careful with it
 unsafe impl Send for EntitiesAndComponentPtr {}
 unsafe impl Sync for EntitiesAndComponentPtr {}
+
+/*
+This is safe because we only allow access (mutable or immutable) to components which impl send sync
+This makes the assumption that unsafe impl send sync is fine as long as you don't actually access it, which I believe to be correct
+*/
+
+unsafe impl Send for EntitiesAndComponentsThreadSafe<'_> {}
+unsafe impl Sync for EntitiesAndComponentsThreadSafe<'_> {}
 
 pub struct World {
     pub entities_and_components: EntitiesAndComponents,
@@ -401,6 +548,9 @@ impl World {
 
         // run the prestep function for each systems in parallel
         {
+            let thread_safe_entities_and_components =
+                EntitiesAndComponentsThreadSafe::new(&mut self.entities_and_components);
+
             // check which systems implement the prestep function and collect mutable references to them
             let mut systems_with_prestep = self
                 .systems
@@ -410,7 +560,7 @@ impl World {
 
             systems_with_prestep
                 .par_iter_mut()
-                .for_each(|system| system.prestep(&self.entities_and_components));
+                .for_each(|system| system.prestep(&thread_safe_entities_and_components));
         }
 
         {
@@ -423,7 +573,7 @@ impl World {
 
             if !systems_with_single_entity_step.is_empty() {
                 let entities_and_components_ptr = &mut self.entities_and_components as *mut _;
-                let entities_and_components_ptr = EntitiesAndComponentPtr {
+                let mut entities_and_components_ptr = EntitiesAndComponentPtr {
                     entities_and_components: entities_and_components_ptr,
                 };
 
@@ -456,6 +606,12 @@ impl World {
     }
 }
 
+impl Default for World {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub trait Component: 'static {}
 
 impl<T: 'static> Component for T {}
@@ -467,7 +623,7 @@ pub trait System {
     /// This function can collect data that will be used in the single_entity_step function
     /// This allows both functions to be called in parallel, without a data race
     /// If you implement this function, make sure to implement implements_prestep as true
-    fn prestep(&mut self, engine: &EntitiesAndComponents) {}
+    fn prestep(&mut self, engine: &EntitiesAndComponentsThreadSafe) {}
     /// Should just return true or false based on whether or not the system implements the prestep function
     fn implements_prestep(&self) -> bool {
         false
@@ -484,6 +640,7 @@ pub trait System {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
 
     #[derive(Debug, PartialEq, Clone)]
     struct Position {
@@ -491,15 +648,11 @@ mod tests {
         y: f32,
     }
 
-    //impl Component for Position {}
-
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     struct Velocity {
         x: f32,
         y: f32,
     }
-
-    //impl Component for Velocity {}
 
     struct MovementSystem {}
 
@@ -794,7 +947,7 @@ mod tests {
     }
 
     impl System for PrestepSystem {
-        fn prestep(&mut self, engine: &EntitiesAndComponents) {
+        fn prestep(&mut self, engine: &EntitiesAndComponentsThreadSafe) {
             self.postions.clear();
 
             for entity in engine.get_entities_with_component::<Position>() {
@@ -854,4 +1007,84 @@ mod tests {
             assert_eq!(position_2.y, 0.0);
         }
     }
+
+    // im trying my absolute hardest here to make undefined behavior or segfaults happen in this test
+    #[test]
+    fn test_race_conditions() {
+        const NUM_ENTITIES: usize = 100;
+        const NUM_RUNS: usize = 100;
+
+        let mut data = vec![];
+
+        let mut positions = vec![];
+        let mut velocities = vec![];
+
+        let mut rng = rand::thread_rng();
+        for _ in 0..NUM_ENTITIES {
+            positions.push(Position {
+                x: rng.gen_range(0.0..100.0),
+                y: rng.gen_range(0.0..100.0),
+            });
+            velocities.push(Velocity {
+                x: rng.gen_range(0.0..100.0),
+                y: rng.gen_range(0.0..100.0),
+            });
+        }
+
+        for _ in 0..NUM_RUNS {
+            let mut engine = World::new();
+
+            for i in 0..100 {
+                engine
+                    .entities_and_components
+                    .add_entity_with((positions[i].clone(), velocities[i].clone()));
+            }
+
+            for i in 0..NUM_ENTITIES {
+                if i % 2 == 0 {
+                    engine.add_system(ParallelMovementSystem {});
+                } else {
+                    engine.add_system(MovementSystem {});
+                }
+            }
+
+            for _ in 0..5 {
+                engine.run();
+            }
+
+            let mut current_run_data = vec![];
+            for entity in engine.entities_and_components.get_entities() {
+                let (position, velocity) = engine
+                    .entities_and_components
+                    .get_components::<(Position, Velocity)>(entity);
+
+                current_run_data.push([position.x, position.y, velocity.x, velocity.y]);
+            }
+            data.push(current_run_data);
+        }
+
+        for data_1 in &data {
+            for data_2 in &data {
+                if data_1 != data_2 {
+                    println!("Data 1: {:?} doesn't match Data 2: {:?}", data_1, data_2);
+                    assert_eq!(data_1, data_2);
+                }
+            }
+        }
+    }
+
+    // shouldn't compile, no great way to test this...
+    /*#[test]
+    fn test_send_sync_multithreaded() {
+        struct TestSystem {}
+
+        impl System for TestSystem {
+            fn prestep(&mut self, engine: &EntitiesAndComponentsThreadSafe) {
+                // try to access something that is not send sync
+                let entity = engine.get_nth_entity(0).unwrap();
+
+                let (position,) = engine.get_components::<(*mut Position,)>(entity);
+            }
+        }
+    }*/
 }

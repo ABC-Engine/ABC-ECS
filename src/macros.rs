@@ -12,7 +12,7 @@ pub trait ComponentsRef<'a> {
 
 macro_rules! impl_components {
     ($($generic_name: ident),*) => {
-        impl<'b, $($generic_name: 'static + Send + Sync),*> ComponentsRef<'b> for ($($generic_name,)*) {
+        impl<'b, $($generic_name: 'static),*> ComponentsRef<'b> for ($($generic_name,)*) {
             type Result = ($(&'b $generic_name,)*);
 
             fn get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> Self::Result {
@@ -52,7 +52,7 @@ pub trait TryComponentsRef<'a> {
 
 macro_rules! impl_try_components {
     ($($generic_name: ident),*) => {
-        impl<'b, $($generic_name: 'static + Send + Sync),*> TryComponentsRef<'b> for ($($generic_name,)*) {
+        impl<'b, $($generic_name: 'static),*> TryComponentsRef<'b> for ($($generic_name,)*) {
             type Result = ($(Option<&'b $generic_name>,)*);
             fn try_get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> ($(Option<&'b $generic_name>,)*) {
                 let components = entities_and_components
@@ -86,7 +86,7 @@ pub trait ComponentsMut<'a> {
 
 macro_rules! impl_components_mut {
     ($($generic_name: ident),*) => {
-        impl<'b, $($generic_name: 'static + Send + Sync),*> ComponentsMut<'b> for ($($generic_name,)*) {
+        impl<'b, $($generic_name: 'static),*> ComponentsMut<'b> for ($($generic_name,)*) {
             type Result = ($(&'b mut $generic_name,)*);
 
             fn get_components_mut(entities_and_components: &'b mut EntitiesAndComponents, entity: Entity) -> Self::Result {
@@ -148,7 +148,7 @@ pub trait TryComponentsMut<'a> {
 
 macro_rules! impl_try_components_mut {
     ($($generic_name: ident),*) => {
-        impl<'b, $($generic_name: 'static + Send + Sync),*> TryComponentsMut<'b> for ($($generic_name,)*) {
+        impl<'b, $($generic_name: 'static),*> TryComponentsMut<'b> for ($($generic_name,)*) {
             type Result = ($(Option<&'b mut $generic_name>,)*);
 
             fn try_get_components_mut(entities_and_components: &'b mut EntitiesAndComponents, entity: Entity) -> Self::Result {
@@ -210,7 +210,7 @@ pub trait OwnedComponents {
 
 macro_rules! impl_owned_components {
     ($($generic_name: ident, $component_num: tt),*) => {
-        impl<$($generic_name: 'static + Send + Sync),*> OwnedComponents for ($($generic_name,)*) {
+        impl<$($generic_name: 'static),*> OwnedComponents for ($($generic_name,)*) {
             type Input = ($($generic_name,)*);
 
             fn make_entity_with_components(

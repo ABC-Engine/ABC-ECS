@@ -8,6 +8,18 @@ This Rust project provides a basic framework for managing game entities, compone
 Create a World:
 
 ```rust
+use ABC_ECS::World;
+
+struct Position {
+    x: f32,
+    y: f32,
+}
+
+struct Velocity {
+    x: f32,
+    y: f32,
+}
+
 fn main(){
     let mut world = World::new();
 
@@ -22,15 +34,6 @@ fn main(){
     // or you can do it in one step:
     let entity = entities_and_components
         .add_entity_with((Position { x: 0.0, y: 0.0 }, Velocity { x: 1.0, y: 1.0 }));
-
-    // Add your system to the engine
-    engine.add_system(MovementSystem {});
-
-    // Run the engine in a loop
-    // would want to run this in a loop in a real game
-    for _ in 0..5 {
-        engine.run();
-    }
 }
 ```
 
