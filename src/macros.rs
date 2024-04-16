@@ -1,6 +1,9 @@
 use crate::*;
 
+/// This trait is used to get a tuple of references to components
+/// it is automatically implemented for tuples of components
 pub trait ComponentsRef<'a> {
+    /// The type of the result
     type Result;
 
     /// Returns a tuple of references to the components
@@ -40,7 +43,10 @@ macro_rules! impl_components {
     };
 }
 
+/// This trait is used to get a tuple of references to components
+/// it is automatically implemented for tuples of components
 pub trait TryComponentsRef<'a> {
+    /// The type of the result
     type Result;
 
     /// Returns a tuple of references to the components
@@ -74,7 +80,10 @@ macro_rules! impl_try_components {
     };
 }
 
+/// This trait is used to get a tuple of mutable references to components
+/// it is automatically implemented for tuples of components
 pub trait ComponentsMut<'a> {
+    /// The type of the result
     type Result;
 
     /// Returns a tuple of mutable references to the components
@@ -136,7 +145,10 @@ macro_rules! impl_components_mut {
     };
 }
 
+/// This trait is used to get a tuple of mutable references to components
+/// it is automatically implemented for tuples of components
 pub trait TryComponentsMut<'a> {
+    /// The type of the result
     type Result;
 
     /// Returns a tuple of mutable references to the components
@@ -198,7 +210,10 @@ macro_rules! impl_try_components_mut {
     };
 }
 
+/// This trait is used to get a tuple of owned components
+/// it is automatically implemented for tuples of components
 pub trait OwnedComponents {
+    /// The type of the input
     type Input;
 
     /// Returns a tuple of owned components
