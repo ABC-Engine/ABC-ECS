@@ -482,6 +482,16 @@ impl<'b> EntitiesAndComponentsThreadSafe<'b> {
     pub fn add_resource<T: Resource + Send + Sync>(&mut self, resource: T) {
         self.entities_and_components.add_resource(resource)
     }
+
+    /// Removes a resource from the game engine
+    pub fn remove_resource<T: Resource + Send + Sync>(&mut self) {
+        self.entities_and_components.remove_resource::<T>()
+    }
+
+    /// Gets a resource from the game engine mutably, panics if the resource does not exist
+    pub fn get_resource_mut<T: Resource + Send + Sync>(&mut self) -> Option<&mut T> {
+        self.entities_and_components.get_resource_mut::<T>()
+    }
 }
 
 /// This struct is very similar to the EntitiesAndComponents struct but
