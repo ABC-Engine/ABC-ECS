@@ -30,6 +30,8 @@ pub trait Resource: 'static {
     fn update(&mut self) {}
     /// This method is needed to allow the resource to be downcast
     fn as_any(&self) -> &dyn Any;
+    /// This method is needed to allow the resource to be downcast mutably
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// This struct holds all the entities and components in the game engine
@@ -306,6 +308,30 @@ impl EntitiesAndComponents {
     pub fn add_resource<T: Resource>(&mut self, resource: T) {
         self.resources.insert(TypeId::of::<T>(), Box::new(resource));
     }
+
+    /// Removes a resource from the game engine
+    pub fn remove_resource<T: Resource>(&mut self) {
+        self.resources.remove(&TypeId::of::<T>());
+    }
+
+    /// Gets a resource from the game engine mutably, panics if the resource does not exist
+    pub fn get_resource_mut<T: Resource>(&mut self) -> Option<&mut T> {
+        match self.resources.get_mut(&TypeId::of::<T>()) {
+            Some(resource) => {
+                let resource = (&mut **resource)
+                    .as_any_mut()
+                    .downcast_mut::<T>()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Resource of type {type:?} does not exist, was the type edited?",
+                            type = std::any::type_name::<T>()
+                        );
+                    });
+                Some(resource)
+            }
+            None => None,
+        }
+    }
 }
 
 /// This struct is a thread safe version of the EntitiesAndComponents struct
@@ -562,6 +588,12 @@ impl<'a> SingleMutEntity<'a> {
     pub fn remove_entity(&mut self) {
         self.entities_and_components.remove_entity(self.entity);
     }
+
+    /// Gets the entity that this struct is referencing
+    /// useful for relating data in prestep and single_entity_step functions
+    pub fn get_entity(&self) -> Entity {
+        self.entity
+    }
 }
 
 struct EntitiesAndComponentPtr {
@@ -649,7 +681,7 @@ impl World {
 
             if !systems_with_single_entity_step.is_empty() {
                 let entities_and_components_ptr = &mut self.entities_and_components as *mut _;
-                let mut entities_and_components_ptr = EntitiesAndComponentPtr {
+                let entities_and_components_ptr = EntitiesAndComponentPtr {
                     entities_and_components: entities_and_components_ptr,
                 };
 
@@ -947,6 +979,10 @@ mod tests {
             }
 
             fn as_any(&self) -> &dyn Any {
+                self
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn Any {
                 self
             }
         }
