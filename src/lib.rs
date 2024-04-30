@@ -16,7 +16,7 @@ use rayon::prelude::ParallelSliceMut;
 // indexed into arrays of components for now...
 /// An entity is a unique identifier for an object in the game engine
 /// The entity itself does not hold any data, it is a key to access data from the EntitiesAndComponents struct
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, PartialOrd, Eq, Ord)]
 pub struct Entity {
     pub(crate) entity_id: DefaultKey,
 }
