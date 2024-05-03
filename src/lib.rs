@@ -4,7 +4,7 @@
 
 #[doc = include_str!("../README.md")]
 use anymap::Map;
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rustc_hash::FxHashMap;
 use slotmap::{DefaultKey, SecondaryMap, SlotMap};
 use std::any::{Any, TypeId};
@@ -606,14 +606,14 @@ impl<'a> SingleMutEntity<'a> {
     }
 }
 
+#[derive(Clone)]
 struct EntitiesAndComponentPtr {
     entities_and_components: *mut EntitiesAndComponents,
 }
 
 impl EntitiesAndComponentPtr {
-    // I know this is horrid but, it's kind of needed for the parallel stuff
-    // it's only used once
-    pub fn as_mut(&self) -> &mut EntitiesAndComponents {
+    // turns the pointer into a mutable reference
+    pub(crate) unsafe fn as_mut(&mut self) -> &mut EntitiesAndComponents {
         unsafe { &mut *self.entities_and_components }
     }
 }
@@ -702,19 +702,32 @@ impl World {
 
                 // run the single_entity_step function for each entity in parallel
                 let entities = &mut self.entities_and_components.get_entities();
+                let entity_len;
+                {
+                    entity_len = entities.len();
+                }
                 let par_chunks = entities.par_chunks_mut(chunk_size);
-                par_chunks.for_each(|entity_chunk| {
-                    for entity in entity_chunk {
-                        for system in systems_with_single_entity_step.as_slice() {
-                            let mut single_entity = SingleMutEntity {
-                                entity: *entity,
-                                entities_and_components: entities_and_components_ptr.as_mut(),
-                            };
+                let entities_and_components_ptr_iter =
+                    std::iter::repeat(entities_and_components_ptr)
+                        .take(entity_len)
+                        .collect::<Vec<EntitiesAndComponentPtr>>();
 
-                            system.single_entity_step(&mut single_entity);
+                par_chunks.zip(entities_and_components_ptr_iter).for_each(
+                    |(entity_chunk, mut entities_and_components_ptr)| {
+                        for entity in entity_chunk {
+                            for system in systems_with_single_entity_step.as_slice() {
+                                let mut single_entity = SingleMutEntity {
+                                    entity: *entity,
+                                    entities_and_components: unsafe {
+                                        entities_and_components_ptr.as_mut()
+                                    },
+                                };
+
+                                system.single_entity_step(&mut single_entity);
+                            }
                         }
-                    }
-                });
+                    },
+                );
             }
         }
 
