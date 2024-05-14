@@ -25,13 +25,35 @@ pub struct Entity {
 /// They are a sort of blend between an entity and a system,
 /// they have their own update method that is called every frame like a system
 /// But unlike a system, they can be accessed by systems
-pub trait Resource: 'static {
+pub trait Resource: 'static + Sized {
     /// This method is called every frame
     fn update(&mut self) {}
     /// This method is needed to allow the resource to be downcast
-    fn as_any(&self) -> &dyn Any;
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     /// This method is needed to allow the resource to be downcast mutably
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+trait ResourceWrapper {
+    fn update(&mut self);
+    fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: Resource> ResourceWrapper for T {
+    fn update(&mut self) {
+        self.update();
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// This struct holds all the entities and components in the game engine
@@ -44,7 +66,7 @@ pub struct EntitiesAndComponents {
     /// resources holds all the resources that are not components and do not have any relation to entities
     /// they are read only and can be accessed by any system
     /// Resources have their own trait, Resource, which has an update method that is called every frame
-    pub(crate) resources: FxHashMap<TypeId, Box<dyn Resource>>,
+    pub(crate) resources: FxHashMap<TypeId, Box<dyn ResourceWrapper>>,
 }
 
 impl EntitiesAndComponents {
