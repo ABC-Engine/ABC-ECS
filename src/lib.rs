@@ -354,6 +354,11 @@ impl EntitiesAndComponents {
             None => None,
         }
     }
+
+    /// Checks if an entity exists in the world
+    pub fn does_entity_exist(&self, entity: Entity) -> bool {
+        self.entities.contains_key(entity.entity_id)
+    }
 }
 
 /// This struct is a thread safe version of the EntitiesAndComponents struct
@@ -513,6 +518,11 @@ impl<'b> EntitiesAndComponentsThreadSafe<'b> {
     /// Gets a resource from the game engine mutably, panics if the resource does not exist
     pub fn get_resource_mut<T: Resource + Send + Sync>(&mut self) -> Option<&mut T> {
         self.entities_and_components.get_resource_mut::<T>()
+    }
+
+    /// Checks if an entity exists in the world
+    pub fn does_entity_exist(&self, entity: Entity) -> bool {
+        self.entities_and_components.does_entity_exist(entity)
     }
 }
 
