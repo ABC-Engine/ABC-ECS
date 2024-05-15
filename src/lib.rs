@@ -359,6 +359,37 @@ impl EntitiesAndComponents {
     pub fn does_entity_exist(&self, entity: Entity) -> bool {
         self.entities.contains_key(entity.entity_id)
     }
+
+    /// This function is used to help debug entities and components
+    /// It will print out all the entities and components in the game engine
+    /// it prints the type id of the components, not the actual type because that is not possible
+    pub fn print_tree(&self) {
+        self.tree(0);
+    }
+
+    /// This function is used to help debug entities and components
+    fn tree(&self, depth: usize) {
+        let mut all_entities = self.get_entities();
+        all_entities.sort();
+
+        if depth == 0 {
+            println!("Entities and Components Tree:");
+        }
+        for entity in all_entities {
+            let offset_string = "    ".repeat(depth);
+            println!("{}Entity: {:?}", offset_string, entity);
+            for (type_id, _) in self.get_all_components(entity).as_raw() {
+                println!("{}    Component: {:?}", offset_string, type_id);
+            }
+
+            if let Some(children) = self
+                .try_get_components::<(EntitiesAndComponents,)>(entity)
+                .0
+            {
+                children.tree(depth + 1);
+            }
+        }
+    }
 }
 
 /// This struct is a thread safe version of the EntitiesAndComponents struct

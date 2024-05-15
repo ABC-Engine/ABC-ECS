@@ -20,11 +20,16 @@ macro_rules! impl_components {
 
             fn get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> Self::Result {
                 let components = entities_and_components
-                    .components
-                    .get(entity.entity_id)
-                    .unwrap_or_else(||{
-                        panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
-                    });
+                .components
+                .get(entity.entity_id);
+
+                if components.is_none() {
+                    println!("//////////////////////////////////////////////////////////////");
+                    entities_and_components.tree(0);
+                    panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+                }
+
+                let components = components.unwrap();
 
                 (
                     $(
@@ -62,11 +67,16 @@ macro_rules! impl_try_components {
             type Result = ($(Option<&'b $generic_name>,)*);
             fn try_get_components(entities_and_components: &'b EntitiesAndComponents, entity: Entity) -> ($(Option<&'b $generic_name>,)*) {
                 let components = entities_and_components
-                    .components
-                    .get(entity.entity_id)
-                    .unwrap_or_else(||{
-                        panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
-                });
+                .components
+                .get(entity.entity_id);
+
+                if components.is_none() {
+                    println!("//////////////////////////////////////////////////////////////");
+                    entities_and_components.tree(0);
+                    panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+                }
+
+                let components = components.unwrap();
 
 
                 (
@@ -114,11 +124,16 @@ macro_rules! impl_components_mut {
                 }
 
                 let components = entities_and_components
-                    .components
-                    .get_mut(entity.entity_id)
-                    .unwrap_or_else(||{
-                        panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
-                });
+                .components
+                .get_mut(entity.entity_id);
+
+                if components.is_none() {
+                    println!("//////////////////////////////////////////////////////////////");
+                    entities_and_components.tree(0);
+                    panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+                }
+
+                let components = components.unwrap();
 
                 (
                     $(
@@ -180,10 +195,15 @@ macro_rules! impl_try_components_mut {
 
                 let components = entities_and_components
                     .components
-                    .get_mut(entity.entity_id)
-                    .unwrap_or_else(||{
-                        panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
-                });
+                    .get_mut(entity.entity_id);
+
+                if components.is_none() {
+                    println!("//////////////////////////////////////////////////////////////");
+                    entities_and_components.tree(0);
+                    panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
+                }
+
+                let components = components.unwrap();
 
                 (
                     $(
