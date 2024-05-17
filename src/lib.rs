@@ -369,6 +369,8 @@ impl EntitiesAndComponents {
 
     /// This function is used to help debug entities and components
     fn tree(&self, depth: usize) {
+        use std::mem::size_of_val;
+
         let mut all_entities = self.get_entities();
         all_entities.sort();
 
@@ -378,8 +380,13 @@ impl EntitiesAndComponents {
         for entity in all_entities {
             let offset_string = "    ".repeat(depth);
             println!("{}Entity: {:?}", offset_string, entity);
-            for (type_id, _) in self.get_all_components(entity).as_raw() {
-                println!("{}    Component: {:?}", offset_string, type_id);
+            for (type_id, any) in self.get_all_components(entity).as_raw() {
+                println!(
+                    "{}    Size: {:?}    TypeID: {:?}",
+                    offset_string,
+                    size_of_val(any),
+                    type_id
+                );
             }
 
             if let Some(children) = self
