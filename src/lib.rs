@@ -62,7 +62,6 @@ pub struct EntitiesAndComponents {
     entities: SlotMap<DefaultKey, Entity>,
     pub(crate) components: SlotMap<DefaultKey, Map<dyn Any + 'static>>, // where components[entity_id][component_id]
     entities_with_components: FxHashMap<TypeId, SecondaryMap<DefaultKey, Entity>>,
-    type_ids_on_entity: SecondaryMap<DefaultKey, Vec<TypeId>>,
     /// resources holds all the resources that are not components and do not have any relation to entities
     /// they are read only and can be accessed by any system
     /// Resources have their own trait, Resource, which has an update method that is called every frame
@@ -77,7 +76,6 @@ impl EntitiesAndComponents {
             entities: SlotMap::with_capacity(100),
             components: SlotMap::with_capacity(100),
             entities_with_components: FxHashMap::with_capacity_and_hasher(3, Default::default()),
-            type_ids_on_entity: SecondaryMap::new(),
             resources: FxHashMap::default(),
         }
     }
@@ -87,7 +85,6 @@ impl EntitiesAndComponents {
     pub fn add_entity(&mut self) -> Entity {
         let entity_id = self.components.insert(Map::new());
         self.entities.insert(Entity { entity_id });
-        self.type_ids_on_entity.insert(entity_id, vec![]);
 
         Entity { entity_id }
     }
@@ -100,15 +97,20 @@ impl EntitiesAndComponents {
 
     /// Removes an entity from the game engine
     pub fn remove_entity(&mut self, entity: Entity) {
-        for type_id in self.type_ids_on_entity[entity.entity_id].clone() {
-            match self.entities_with_components.get_mut(&type_id) {
-                Some(entities) => {
-                    entities.remove(entity.entity_id);
+        match self.components.get(entity.entity_id) {
+            Some(components) => {
+                for type_id in components.as_raw().keys() {
+                    match self.entities_with_components.get_mut(&type_id) {
+                        Some(entities) => {
+                            entities.remove(entity.entity_id);
+                        }
+                        None => {}
+                    }
                 }
-                None => {}
             }
+            None => {}
         }
-        self.type_ids_on_entity.remove(entity.entity_id);
+
         self.components.remove(entity.entity_id);
         self.entities.remove(entity.entity_id);
     }
@@ -236,7 +238,7 @@ impl EntitiesAndComponents {
         components.insert(Box::new(component));
 
         // add the entity to the list of entities with the component
-        match self.entities_with_components.entry(TypeId::of::<T>()) {
+        match self.entities_with_components.entry(TypeId::of::<Box<T>>()) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 entry.get_mut().insert(entity.entity_id, entity);
             }
@@ -246,7 +248,6 @@ impl EntitiesAndComponents {
                 entry.insert(new_map);
             }
         }
-        self.type_ids_on_entity[entity.entity_id].push(TypeId::of::<T>());
     }
 
     /// Removes a component from an entity
@@ -263,14 +264,15 @@ impl EntitiesAndComponents {
         components.remove::<Box<T>>();
 
         // remove the entity from the list of entities with the component
-        match self.entities_with_components.get_mut(&TypeId::of::<T>()) {
+        match self
+            .entities_with_components
+            .get_mut(&TypeId::of::<Box<T>>())
+        {
             Some(entities) => {
                 entities.remove(entity.entity_id);
             }
             None => {}
         }
-        // this is O(n) but, depending on the number of components on an entity, n should be small
-        self.type_ids_on_entity[entity.entity_id].retain(|t| *t != TypeId::of::<T>());
     }
 
     /// returns an iterator over all entities with a certain component
@@ -278,7 +280,7 @@ impl EntitiesAndComponents {
         &self,
     ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
     {
-        match self.entities_with_components.get(&TypeId::of::<T>()) {
+        match self.entities_with_components.get(&TypeId::of::<Box<T>>()) {
             Some(entities) => Some(entities.values()).into_iter().flatten(),
             None => None.into_iter().flatten(), // this is a hack so that it returns an empty iterator
         }
@@ -286,7 +288,7 @@ impl EntitiesAndComponents {
 
     /// gets the number of entities with a certain component
     pub fn get_entity_count_with_component<T: Component>(&self) -> usize {
-        match self.entities_with_components.get(&TypeId::of::<T>()) {
+        match self.entities_with_components.get(&TypeId::of::<Box<T>>()) {
             Some(entities) => entities.len(),
             None => 0,
         }
@@ -295,7 +297,7 @@ impl EntitiesAndComponents {
     /// gets the nth entity with a certain component
     /// O(n) use get_entities_with_component if you need to iterate over all entities with a certain component
     pub fn get_entity_with_component<T: Component>(&self, index: usize) -> Option<Entity> {
-        match self.entities_with_components.get(&TypeId::of::<T>()) {
+        match self.entities_with_components.get(&TypeId::of::<Box<T>>()) {
             Some(entities) => {
                 if let Some(entity) = entities.values().nth(index) {
                     Some(entity.clone())
@@ -369,8 +371,6 @@ impl EntitiesAndComponents {
 
     /// This function is used to help debug entities and components
     fn tree(&self, depth: usize) {
-        use std::mem::size_of_val;
-
         let mut all_entities = self.get_entities();
         all_entities.sort();
 
@@ -380,13 +380,8 @@ impl EntitiesAndComponents {
         for entity in all_entities {
             let offset_string = "    ".repeat(depth);
             println!("{}Entity: {:?}", offset_string, entity);
-            for (type_id, any) in self.get_all_components(entity).as_raw() {
-                println!(
-                    "{}    Size: {:?}    TypeID: {:?}",
-                    offset_string,
-                    size_of_val(any),
-                    type_id
-                );
+            for (type_id, _) in self.get_all_components(entity).as_raw() {
+                println!("{}    TypeID: {:?}", offset_string, type_id);
             }
 
             if let Some(children) = self
@@ -1344,4 +1339,6 @@ mod tests {
 
         assert_eq!(non_send_sync.ptr, &0);
     }
+
+    fn test_send_sync() {}
 }
