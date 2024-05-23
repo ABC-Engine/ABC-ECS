@@ -709,11 +709,18 @@ as long as you don't actually access it, which I believe to be correct
 unsafe impl Send for EntitiesAndComponentsThreadSafe<'_> {}
 unsafe impl Sync for EntitiesAndComponentsThreadSafe<'_> {}
 
+/// This struct is used to access a specific System in the game engine
+/// most of the time you will not need to use this struct
+pub struct SystemHandle {
+    system_id: DefaultKey,
+}
+
 /// This struct is the main struct for the game engine
 pub struct World {
     /// This struct holds all the entities and components in the game engine
     pub entities_and_components: EntitiesAndComponents,
-    systems: Vec<Box<dyn System + Sync + Send>>,
+    //systems: Vec<Box<dyn System + Sync + Send>>,
+    systems: SlotMap<DefaultKey, Box<dyn SystemWrapper + Send + Sync>>,
 }
 
 impl World {
@@ -721,13 +728,35 @@ impl World {
     pub fn new() -> Self {
         World {
             entities_and_components: EntitiesAndComponents::new(),
-            systems: vec![],
+            systems: SlotMap::with_capacity(10),
         }
     }
 
     /// Adds a system to the world
-    pub fn add_system<T: System + Send + Sync + 'static>(&mut self, system: T) {
-        self.systems.push(Box::new(system));
+    pub fn add_system<T: System + Send + Sync + 'static>(&mut self, system: T) -> SystemHandle {
+        SystemHandle {
+            system_id: self.systems.insert(Box::new(system)),
+        }
+    }
+
+    /// Removes a system from the world based on the SystemHandle
+    pub fn remove_system(&mut self, system: SystemHandle) {
+        self.systems.remove(system.system_id);
+    }
+
+    /// Removes all systems of a certain type from the world
+    /// O(n) where n is the number of systems
+    pub fn remove_all_systems_of_type<T: System + Send + Sync + 'static>(&mut self) {
+        let mut systems_to_remove = Vec::new();
+        for (key, system) in self.systems.iter() {
+            if system.as_any().is::<T>() {
+                systems_to_remove.push(key);
+            }
+        }
+
+        for key in systems_to_remove {
+            self.systems.remove(key);
+        }
     }
 
     /// Removes all systems from the world
@@ -754,9 +783,9 @@ impl World {
             // check which systems implement the prestep function and collect mutable references to them
             let mut systems_with_prestep = self
                 .systems
-                .iter_mut()
+                .values_mut()
                 .filter(|system| system.implements_prestep())
-                .collect::<Vec<&mut Box<dyn System + Sync + Send>>>();
+                .collect::<Vec<&mut Box<dyn SystemWrapper + Sync + Send>>>();
 
             systems_with_prestep
                 .par_iter_mut()
@@ -767,9 +796,9 @@ impl World {
             // check which systems implement the single_entity_step function and collect mutable references to them
             let systems_with_single_entity_step = self
                 .systems
-                .iter()
+                .values()
                 .filter(|system| system.implements_single_entity_step())
-                .collect::<Vec<&Box<dyn System + Sync + Send>>>();
+                .collect::<Vec<&Box<dyn SystemWrapper + Sync + Send>>>();
 
             if !systems_with_single_entity_step.is_empty() {
                 let entities_and_components_ptr = &mut self.entities_and_components as *mut _;
@@ -813,7 +842,7 @@ impl World {
             }
         }
 
-        for system in &mut self.systems {
+        for system in &mut self.systems.values_mut() {
             system.run(&mut self.entities_and_components);
         }
     }
@@ -834,7 +863,7 @@ impl<T: 'static> Component for T {}
 /// Systems access and change components on objects
 /// Be careful to implement get_allow_entity_based_multithreading as true if you want to use the single_entity_step function
 /// If you don't it will still work but, it will be slower (in most cases)
-pub trait System {
+pub trait System: 'static + Sized {
     /// This function can collect data that will be used in the single_entity_step function
     /// This allows both functions to be called in parallel, without a data race
     /// If you implement this function, make sure to implement implements_prestep as true
@@ -851,6 +880,52 @@ pub trait System {
     }
     /// This function is called after the single_entity_step function is called for all entities
     fn run(&mut self, engine: &mut EntitiesAndComponents) {}
+
+    /// This function is used to downcast the system to an Any trait object
+    /// Should be automatically implemented
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    /// This function is used to downcast the system to an Any trait object
+    /// Should be automatically implemented
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+trait SystemWrapper {
+    fn prestep(&mut self, engine: &EntitiesAndComponentsThreadSafe);
+    fn implements_prestep(&self) -> bool;
+    fn single_entity_step(&self, single_entity: &mut SingleMutEntity);
+    fn implements_single_entity_step(&self) -> bool;
+    fn run(&mut self, engine: &mut EntitiesAndComponents);
+    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+}
+
+impl<T: System> SystemWrapper for T {
+    fn prestep(&mut self, engine: &EntitiesAndComponentsThreadSafe) {
+        System::prestep(self, engine);
+    }
+    fn implements_prestep(&self) -> bool {
+        System::implements_prestep(self)
+    }
+    fn single_entity_step(&self, single_entity: &mut SingleMutEntity) {
+        System::single_entity_step(self, single_entity);
+    }
+    fn implements_single_entity_step(&self) -> bool {
+        System::implements_single_entity_step(self)
+    }
+    fn run(&mut self, engine: &mut EntitiesAndComponents) {
+        System::run(self, engine);
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        System::as_any(self)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        System::as_any_mut(self)
+    }
 }
 
 #[cfg(test)]
