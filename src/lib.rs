@@ -582,6 +582,18 @@ impl<'a> SingleMutEntity<'a> {
             })
     }
 
+    /// Gets a reference to a resource
+    pub fn get_resource<T: Resource + Send + Sync>(&self) -> &T {
+        self.entities_and_components
+            .get_resource::<T>()
+            .unwrap_or_else(|| {
+                panic!(
+                    "Resource of type {type:?} does not exist, was the type edited?",
+                    type = std::any::type_name::<T>()
+                );
+            })
+    }
+
     /// Gets a mutable reference to a component on an entity
     pub fn try_get_component<T: Component + Send + Sync>(&self) -> Option<&Box<T>> {
         self.entities_and_components
@@ -716,6 +728,11 @@ impl World {
     /// Adds a system to the world
     pub fn add_system<T: System + Send + Sync + 'static>(&mut self, system: T) {
         self.systems.push(Box::new(system));
+    }
+
+    /// Removes all systems from the world
+    pub fn remove_all_systems(&mut self) {
+        self.systems.clear();
     }
 
     /// Runs the world
