@@ -474,6 +474,22 @@ impl EntitiesAndComponents {
             self.remove_component_from::<Parent>(child_entity);
         }
     }
+
+    /// gets the entities with children
+    pub fn get_entities_with_children(
+        &self,
+    ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
+    {
+        self.get_entities_with_component::<Children>()
+    }
+
+    /// gets the entities with parents
+    pub fn get_entities_with_parent(
+        &self,
+    ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
+    {
+        self.get_entities_with_component::<Parent>()
+    }
 }
 
 /// This struct is a thread safe version of the EntitiesAndComponents struct
@@ -714,6 +730,22 @@ impl<'b> EntitiesAndComponentsThreadSafe<'b> {
             // remove the parent from the child
             self.remove_component_from::<Parent>(child_entity);
         }
+    }
+
+    /// gets the entities with children
+    pub fn get_entities_with_children(
+        &self,
+    ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
+    {
+        self.get_entities_with_component::<Children>()
+    }
+
+    /// gets the entities with parents
+    pub fn get_entities_with_parent(
+        &self,
+    ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
+    {
+        self.get_entities_with_component::<Parent>()
     }
 }
 
