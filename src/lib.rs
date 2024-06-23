@@ -376,6 +376,7 @@ impl EntitiesAndComponents {
     }
 
     /// This function is used to help debug entities and components
+    /// broken for now
     fn tree(&self, depth: usize) {
         let mut all_entities = self.get_entities();
         all_entities.sort();
@@ -388,13 +389,6 @@ impl EntitiesAndComponents {
             println!("{}Entity: {:?}", offset_string, entity);
             for (type_id, _) in self.get_all_components(entity).as_raw() {
                 println!("{}    TypeID: {:?}", offset_string, type_id);
-            }
-
-            if let Some(children) = self
-                .try_get_components::<(EntitiesAndComponents,)>(entity)
-                .0
-            {
-                children.tree(depth + 1);
             }
         }
     }
@@ -1622,5 +1616,34 @@ mod tests {
         assert_eq!(non_send_sync.ptr, &0);
     }
 
-    fn test_send_sync() {}
+    fn test_children() {
+        let mut engine = World::new();
+        let entities_and_components = &mut engine.entities_and_components;
+
+        let parent = entities_and_components.add_entity();
+        let child = entities_and_components.add_entity();
+
+        entities_and_components.add_component_to(
+            parent,
+            Children {
+                children: vec![child],
+            },
+        );
+        entities_and_components.add_component_to(child, Parent(parent));
+
+        let children = entities_and_components.get_children(parent);
+
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0], child);
+
+        let parent = entities_and_components.get_parent(child);
+
+        assert_eq!(parent, parent);
+
+        entities_and_components.remove_parent(child);
+
+        let parent = entities_and_components.get_parent(child);
+
+        assert_eq!(parent, None);
+    }
 }
