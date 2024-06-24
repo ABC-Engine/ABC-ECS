@@ -103,6 +103,9 @@ impl EntitiesAndComponents {
 
     /// Removes an entity from the game engine
     pub fn remove_entity(&mut self, entity: Entity) {
+        self.remove_parent(entity);
+        self.remove_all_children(entity);
+
         match self.components.get(entity.entity_id) {
             Some(components) => {
                 for type_id in components.as_raw().keys() {
@@ -469,6 +472,14 @@ impl EntitiesAndComponents {
         }
     }
 
+    /// remove all children from an entity
+    fn remove_all_children(&mut self, parent_entity: Entity) {
+        let children = self.get_children(parent_entity);
+        for child in children {
+            self.remove_parent(child);
+        }
+    }
+
     /// gets the entities with children
     pub fn get_entities_with_children(
         &self,
@@ -652,78 +663,25 @@ impl<'b> EntitiesAndComponentsThreadSafe<'b> {
 
     /// gets the children of an entity
     pub fn get_children(&self, entity: Entity) -> Vec<Entity> {
-        let (children,) = self.try_get_components::<(Children,)>(entity);
-
-        if let Some(children) = children {
-            return children.children.clone();
-        } else {
-            return vec![];
-        }
+        self.entities_and_components.get_children(entity)
     }
 
     /// gets the parent of an entity
     /// returns None if the entity is a root entity
     pub fn get_parent(&self, entity: Entity) -> Option<Entity> {
-        let (parent,) = self.try_get_components::<(Parent,)>(entity);
-
-        if let Some(parent) = parent {
-            return Some(parent.0);
-        } else {
-            return None;
-        }
+        self.entities_and_components.get_parent(entity)
     }
 
     /// sets the parent of an entity
     /// if the entity already has a parent it will be changed
     pub fn set_parent(&mut self, child_entity: Entity, parent_entity: Entity) {
-        // first: make sure the child entity does not already have a parent
-        self.remove_parent(child_entity);
-
-        // second: make sure the parent entity does not already have the child as a child
-        if let (Some(children),) = self.try_get_components::<(Children,)>(parent_entity) {
-            if children.children.contains(&child_entity) {
-                return;
-            }
-        }
-
-        // third: add the child to the parent's children
-        // at this point we know the child does not have a parent (anymore) and the parent does not have the child as a child
-        if let (Some(children),) = self.try_get_components_mut::<(Children,)>(parent_entity) {
-            children.children.push(child_entity);
-        } else {
-            let children = Children {
-                children: vec![child_entity],
-            };
-
-            self.add_component_to(parent_entity, children);
-        }
-
-        // fourth: set the parent of the child
-        if let (Some(parent),) = self.try_get_components_mut::<(Parent,)>(child_entity) {
-            parent.0 = parent_entity;
-        } else {
-            let parent = Parent(parent_entity);
-            self.add_component_to(child_entity, parent);
-        }
+        self.entities_and_components
+            .set_parent(child_entity, parent_entity)
     }
 
     /// this function removes the link between a parent and a child making the child a root entity
     pub fn remove_parent(&mut self, child_entity: Entity) {
-        if let (Some(parent),) = self.try_get_components::<(Parent,)>(child_entity) {
-            // remove the child from the parent's children
-            let (children,) = self.get_components_mut::<(Children,)>(parent.0);
-
-            // O(n) but n should be small, we'll see if this is a problem
-            children.children.retain(|&x| x != child_entity);
-
-            if children.children.is_empty() {
-                // remove the parent from the child
-                self.remove_component_from::<Parent>(child_entity);
-            }
-
-            // remove the parent from the child
-            self.remove_component_from::<Parent>(child_entity);
-        }
+        self.entities_and_components.remove_parent(child_entity)
     }
 
     /// gets the entities with children
@@ -731,7 +689,7 @@ impl<'b> EntitiesAndComponentsThreadSafe<'b> {
         &self,
     ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
     {
-        self.get_entities_with_component::<Children>()
+        self.entities_and_components.get_entities_with_children()
     }
 
     /// gets the entities with parents
@@ -739,7 +697,7 @@ impl<'b> EntitiesAndComponentsThreadSafe<'b> {
         &self,
     ) -> std::iter::Flatten<std::option::IntoIter<slotmap::secondary::Values<'_, DefaultKey, Entity>>>
     {
-        self.get_entities_with_component::<Parent>()
+        self.entities_and_components.get_entities_with_parent()
     }
 }
 
