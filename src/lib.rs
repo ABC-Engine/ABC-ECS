@@ -421,14 +421,28 @@ impl EntitiesAndComponents {
 
     /// sets the parent of an entity
     /// if the entity already has a parent it will be changed
-    pub fn set_parent(&mut self, child_entity: Entity, parent_entity: Entity) {
+    /// returns true if the parent was set, false if the parent was not set (inverse relationship detected)
+    pub fn set_parent(&mut self, child_entity: Entity, parent_entity: Entity) -> bool {
+        if child_entity == parent_entity {
+            return false; // can't be your own parent
+        }
+
         // first: make sure the child entity does not already have a parent
         self.remove_parent(child_entity);
 
         // second: make sure the parent entity does not already have the child as a child
         if let (Some(children),) = self.try_get_components::<(Children,)>(parent_entity) {
             if children.children.contains(&child_entity) {
-                return;
+                return true; // it didn't do anything but the relationship desired is there so return true
+            }
+        }
+
+        // TODO: make sure there isn't an inverse relationship
+        let mut current_parent = parent_entity;
+        while let Some(parent) = self.get_parent(current_parent) {
+            current_parent = parent;
+            if current_parent == child_entity {
+                return false; // inverse relationship detected
             }
         }
 
@@ -451,6 +465,8 @@ impl EntitiesAndComponents {
             let parent = Parent(parent_entity);
             self.add_component_to(child_entity, parent);
         }
+
+        true
     }
 
     /// this function removes the link between a parent and a child making the child a root entity
@@ -674,7 +690,8 @@ impl<'b> EntitiesAndComponentsThreadSafe<'b> {
 
     /// sets the parent of an entity
     /// if the entity already has a parent it will be changed
-    pub fn set_parent(&mut self, child_entity: Entity, parent_entity: Entity) {
+    /// returns true if the parent was set, false if the parent was not set (inverse relationship detected)
+    pub fn set_parent(&mut self, child_entity: Entity, parent_entity: Entity) -> bool {
         self.entities_and_components
             .set_parent(child_entity, parent_entity)
     }
