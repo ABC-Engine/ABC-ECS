@@ -102,9 +102,19 @@ impl EntitiesAndComponents {
     }
 
     /// Removes an entity from the game engine
+    /// This will also remove all children of the entity
     pub fn remove_entity(&mut self, entity: Entity) {
         self.remove_parent(entity);
-        self.remove_all_children(entity);
+        let children = self
+            .try_get_components::<(Children,)>(entity)
+            .0
+            .unwrap_or(&Children { children: vec![] })
+            .children
+            .clone();
+
+        for child in children {
+            self.remove_entity(child);
+        }
 
         match self.components.get(entity.entity_id) {
             Some(components) => {
