@@ -1099,6 +1099,11 @@ impl<T: System> SystemWrapper for T {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        fs::{self, File, OpenOptions},
+        io::Write,
+    };
+
     use super::*;
     use rand::Rng;
 
@@ -1630,5 +1635,145 @@ mod tests {
         let parent = entities_and_components.get_parent(child);
 
         assert_eq!(parent, None);
+    }
+
+    #[test]
+    fn bench_every_function() {
+        let mut engine = World::new();
+        let entities_and_components = &mut engine.entities_and_components;
+
+        let start = std::time::Instant::now();
+        for i in 0..10000000 {
+            let entity = entities_and_components.add_entity();
+        }
+        let add_entity_time = start.elapsed();
+
+        let start = std::time::Instant::now();
+        for (i, entity) in entities_and_components.get_entities().iter().enumerate() {
+            entities_and_components.add_component_to(*entity, Position { x: 0.0, y: 0.0 });
+            if i % 2 == 0 {
+                entities_and_components.add_component_to(*entity, Velocity { x: 1.0, y: 1.0 });
+            }
+        }
+        let add_component_time = start.elapsed();
+
+        let start = std::time::Instant::now();
+        for (i, entity) in entities_and_components.get_entities().iter().enumerate() {
+            let (position,) = entities_and_components.get_components::<(Position,)>(*entity);
+            if i % 2 == 0 {
+                let (velocity,) = entities_and_components.get_components::<(Velocity,)>(*entity);
+            }
+        }
+        let get_component_time = start.elapsed();
+
+        let start = std::time::Instant::now();
+        for (i, entity) in entities_and_components.get_entities().iter().enumerate() {
+            if i % 2 == 0 {
+                let (position, velocity) =
+                    entities_and_components.get_components::<(Position, Velocity)>(*entity);
+            } else {
+                let (position,) = entities_and_components.get_components::<(Position,)>(*entity);
+            }
+        }
+        let get_components_time = start.elapsed();
+
+        let start = std::time::Instant::now();
+        for (i, entity) in entities_and_components.get_entities().iter().enumerate() {
+            if i % 2 == 0 {
+                let (position, velocity) =
+                    entities_and_components.get_components_mut::<(Position, Velocity)>(*entity);
+            } else {
+                let (position,) =
+                    entities_and_components.get_components_mut::<(Position,)>(*entity);
+            }
+        }
+        let get_components_mut_time = start.elapsed();
+
+        let start = std::time::Instant::now();
+        for (i, entity) in entities_and_components.get_entities().iter().enumerate() {
+            if i % 2 == 0 {
+                let (position, velocity) =
+                    entities_and_components.try_get_components::<(Position, Velocity)>(*entity);
+            } else {
+                let (position,) =
+                    entities_and_components.try_get_components::<(Position,)>(*entity);
+            }
+        }
+        let try_get_components_time = start.elapsed();
+
+        let start = std::time::Instant::now();
+        for (i, entity) in entities_and_components.get_entities().iter().enumerate() {
+            if i % 2 == 0 {
+                let (position, velocity) =
+                    entities_and_components.try_get_components_mut::<(Position, Velocity)>(*entity);
+            } else {
+                let (position,) =
+                    entities_and_components.try_get_components_mut::<(Position,)>(*entity);
+            }
+        }
+        let try_get_components_mut_time = start.elapsed();
+
+        let start = std::time::Instant::now();
+        for entity in entities_and_components.get_entities() {
+            entities_and_components.remove_entity(entity);
+        }
+        let remove_entity_time = start.elapsed();
+
+        File::create("bench.txt").unwrap();
+        let mut file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open("bench.txt")
+            .unwrap();
+
+        let _ = file.write_all(format!("Add Entity: {:?}\n", add_entity_time).as_bytes());
+
+        write_bar(&mut file, add_entity_time.as_micros() as usize);
+
+        let _ = file.write_all(format!("Add Component: {:?}\n", add_component_time).as_bytes());
+
+        write_bar(&mut file, add_component_time.as_micros() as usize);
+
+        let _ = file.write_all(format!("Get Component: {:?}\n", get_component_time).as_bytes());
+
+        write_bar(&mut file, get_component_time.as_micros() as usize);
+
+        let _ = file.write_all(format!("Get Components: {:?}\n", get_components_time).as_bytes());
+
+        write_bar(&mut file, get_components_time.as_micros() as usize);
+
+        let _ = file
+            .write_all(format!("Get Components Mut: {:?}\n", get_components_mut_time).as_bytes());
+
+        write_bar(&mut file, get_components_mut_time.as_micros() as usize);
+
+        let _ = file
+            .write_all(format!("Try Get Components: {:?}\n", try_get_components_time).as_bytes());
+
+        write_bar(&mut file, try_get_components_time.as_micros() as usize);
+
+        let _ = file.write_all(
+            format!(
+                "Try Get Components Mut: {:?}\n",
+                try_get_components_mut_time
+            )
+            .as_bytes(),
+        );
+
+        write_bar(&mut file, try_get_components_mut_time.as_micros() as usize);
+
+        let _ = file.write_all(format!("Remove Entity: {:?}\n", remove_entity_time).as_bytes());
+
+        write_bar(&mut file, remove_entity_time.as_micros() as usize);
+    }
+
+    fn write_bar(file: &mut File, length: usize) {
+        const ADJUSTMENT: usize = 100000;
+        let length = length / ADJUSTMENT;
+
+        for _ in 0..length {
+            let _ = file.write_all(b"#");
+        }
+        let _ = file.write_all(b"\n");
     }
 }

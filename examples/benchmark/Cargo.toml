@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 ABC-ECS = { path = "../../../ABC-ECS" }
-bevy_ecs = "0.13.2"
+bevy_ecs = "0.14.0"
 colored = "2.1.0"
 rand = "0.8.5"
 
