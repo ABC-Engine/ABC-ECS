@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/ABC-Engine/ABC-ECS"
 description = "A simple, fast, and flexible Entity-Component-System library for Rust."
 keywords = ["ecs", "multithreaded", "library", "game", "fast"]
-categories = ["game-development", "library", "ecs"]
+categories = ["game-development"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
