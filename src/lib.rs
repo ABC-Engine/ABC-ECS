@@ -996,11 +996,18 @@ impl World {
                     |(entity_chunk, mut entities_and_components_ptr)| {
                         for entity in entity_chunk {
                             for system in systems_with_single_entity_step.as_slice() {
+                                let entities_and_components =
+                                    unsafe { entities_and_components_ptr.as_mut() };
+
+                                if !entities_and_components.does_entity_exist(*entity) {
+                                    // don't run any other systems on this entity it no longer exists
+                                    // this means the entity was removed in the single entity step function of a previous system
+                                    break;
+                                }
+
                                 let mut single_entity = SingleMutEntity {
                                     entity: *entity,
-                                    entities_and_components: unsafe {
-                                        entities_and_components_ptr.as_mut()
-                                    },
+                                    entities_and_components,
                                 };
 
                                 system.single_entity_step(&mut single_entity);
