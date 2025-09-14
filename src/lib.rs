@@ -3,7 +3,7 @@
 //! Tailored specifically for ABC-Game-Engine but can be used for any project
 
 #[doc = include_str!("../README.md")]
-use anymap::Map;
+use anymap3::Map;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rustc_hash::FxHashMap;
 use slotmap::{DefaultKey, SecondaryMap, SlotMap};
@@ -159,7 +159,7 @@ impl EntitiesAndComponents {
     /// Gets a reference to all the components on an entity
     /// Returns an AnyMap, which can be used to get a reference to a component
     /// This should rarely if ever be used
-    pub fn get_all_components(&self, entity: Entity) -> &anymap::Map<(dyn Any + 'static)> {
+    pub fn get_all_components(&self, entity: Entity) -> &Map<dyn Any + 'static> {
         self.components.get(entity.entity_id).unwrap_or_else(|| {
             panic!("Entity ID {entity:?} does not exist, was the Entity ID edited?");
         })
@@ -168,10 +168,7 @@ impl EntitiesAndComponents {
     /// Gets a mutable reference to the components on an entity
     /// If the entity does not exist, it will panic
     /// This should rarely if ever be used
-    pub fn get_all_components_mut(
-        &mut self,
-        entity: Entity,
-    ) -> &mut anymap::Map<(dyn Any + 'static)> {
+    pub fn get_all_components_mut(&mut self, entity: Entity) -> &mut Map<dyn Any + 'static> {
         self.components
             .get_mut(entity.entity_id)
             .unwrap_or_else(|| {
